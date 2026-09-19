@@ -8,12 +8,3 @@ export function createOAuthClient() {
     env.googleRedirectUri,
   );
 }
-
-// Sign-in only (identity), no Gmail access.
-export function getLoginUrl(state: string) {
-  return createOAuthClient().generateAuthUrl({
-    scope: ["openid", "email", "profile"],
-    state,
-    prompt: "select_account",
-  });
-}

@@ -1,26 +1,260 @@
 @import "tailwindcss";
 
+/* Design tokens: Averis x Monash design system (navy + orange, light and dark).
+   Source of truth: the design system artifact; see docs/design-handoff.md. */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light dark;
+  --background: #f3f6fb;
+  --foreground: #11213f;
+  --surface-page: #f3f6fb;
+  --surface-card: #ffffff;
+  --surface-inset: #e4eaf4;
+  --text-strong: #11213f;
+  --text-label: #1d3054;
+  --text-muted: #42587f;
+  --text-subtle: #587099;
+  --border: #ccd7ea;
+  --border-control: #587099;
+  --action: #1d3054;
+  --on-action: #ffffff;
+  --accent: #f7811f;
+  --on-accent: #0a1529;
+  --accent-text: #a84e08;
+  --accent-soft: rgba(247, 129, 31, 0.14);
+  --status-match: #0b6b62;
+  --status-match-soft: rgba(11, 107, 98, 0.12);
+  --status-mismatch: #b3261e;
+  --status-mismatch-soft: rgba(179, 38, 30, 0.10);
+  --status-review: #a84e08;
+  --code-fill: rgba(17, 33, 63, 0.07);
+  --brand-surface: #11213f;
+  --on-brand: #f3f6fb;
+  --on-brand-muted: #ccd7ea;
+  --brand-active: rgba(255, 255, 255, 0.10);
+  --chart-bar: #42587f;
+  --confidence-high: #0b6b62;
+  --confidence-mid: #f7811f;
+  --confidence-low: #b3261e;
+}
+
+/* Follow the OS preference unless the page sets data-theme explicitly. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --background: #0a1529;
+    --foreground: #f3f6fb;
+    --surface-page: #0a1529;
+    --surface-card: #11213f;
+    --surface-inset: #1d3054;
+    --text-strong: #f3f6fb;
+    --text-label: #e4eaf4;
+    --text-muted: #a6b8d6;
+    --text-subtle: #7d93ba;
+    --border: #1d3054;
+    --border-control: #7d93ba;
+    --action: #e4eaf4;
+    --on-action: #0a1529;
+    --accent: #ff9d55;
+    --on-accent: #0a1529;
+    --accent-text: #ff9d55;
+    --accent-soft: rgba(255, 157, 85, 0.16);
+    --status-match: #63d6c4;
+    --status-match-soft: rgba(99, 214, 196, 0.14);
+    --status-mismatch: #ff8f86;
+    --status-mismatch-soft: rgba(255, 143, 134, 0.14);
+    --status-review: #ff9d55;
+    --code-fill: rgba(243, 246, 251, 0.09);
+    --brand-surface: #1d3054;
+    --on-brand: #f3f6fb;
+    --on-brand-muted: #ccd7ea;
+    --brand-active: rgba(255, 255, 255, 0.10);
+    --chart-bar: #7d93ba;
+    --confidence-high: #63d6c4;
+    --confidence-mid: #ff9d55;
+    --confidence-low: #ff8f86;
+  }
+}
+
+:root[data-theme="dark"] {
+  --background: #0a1529;
+  --foreground: #f3f6fb;
+  --surface-page: #0a1529;
+  --surface-card: #11213f;
+  --surface-inset: #1d3054;
+  --text-strong: #f3f6fb;
+  --text-label: #e4eaf4;
+  --text-muted: #a6b8d6;
+  --text-subtle: #7d93ba;
+  --border: #1d3054;
+  --border-control: #7d93ba;
+  --action: #e4eaf4;
+  --on-action: #0a1529;
+  --accent: #ff9d55;
+  --on-accent: #0a1529;
+  --accent-text: #ff9d55;
+  --accent-soft: rgba(255, 157, 85, 0.16);
+  --status-match: #63d6c4;
+  --status-match-soft: rgba(99, 214, 196, 0.14);
+  --status-mismatch: #ff8f86;
+  --status-mismatch-soft: rgba(255, 143, 134, 0.14);
+  --status-review: #ff9d55;
+  --code-fill: rgba(243, 246, 251, 0.09);
+  --brand-surface: #1d3054;
+  --on-brand: #f3f6fb;
+  --on-brand-muted: #ccd7ea;
+  --brand-active: rgba(255, 255, 255, 0.10);
+  --chart-bar: #7d93ba;
+  --confidence-high: #63d6c4;
+  --confidence-mid: #ff9d55;
+  --confidence-low: #ff8f86;
 }
 
 @theme inline {
+  /* Raw scales: bg-navy-800, text-orange-700 ... */
+  --color-navy-50: #f3f6fb;
+  --color-navy-100: #e4eaf4;
+  --color-navy-200: #ccd7ea;
+  --color-navy-300: #a6b8d6;
+  --color-navy-400: #7d93ba;
+  --color-navy-500: #587099;
+  --color-navy-600: #42587f;
+  --color-navy-700: #2f4468;
+  --color-navy-800: #1d3054;
+  --color-navy-900: #11213f;
+  --color-navy-950: #0a1529;
+  --color-orange-300: #ffc08f;
+  --color-orange-400: #ff9d55;
+  --color-orange-500: #f7811f;
+  --color-orange-600: #d96a0d;
+  --color-orange-700: #a84e08;
+  --color-white: #ffffff;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  /* Semantic colors: bg-surface-card, text-text-muted, border-border-control, bg-accent ... */
+  --color-surface-page: var(--surface-page);
+  --color-surface-card: var(--surface-card);
+  --color-surface-inset: var(--surface-inset);
+  --color-text-strong: var(--text-strong);
+  --color-text-label: var(--text-label);
+  --color-text-muted: var(--text-muted);
+  --color-text-subtle: var(--text-subtle);
+  --color-border: var(--border);
+  --color-border-control: var(--border-control);
+  --color-action: var(--action);
+  --color-on-action: var(--on-action);
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-accent-text: var(--accent-text);
+  --color-accent-soft: var(--accent-soft);
+  --color-status-match: var(--status-match);
+  --color-status-match-soft: var(--status-match-soft);
+  --color-status-mismatch: var(--status-mismatch);
+  --color-status-mismatch-soft: var(--status-mismatch-soft);
+  --color-status-review: var(--status-review);
+  --color-code-fill: var(--code-fill);
+  --color-brand-surface: var(--brand-surface);
+  --color-on-brand: var(--on-brand);
+  --color-on-brand-muted: var(--on-brand-muted);
+  --color-brand-active: var(--brand-active);
+  --color-chart-bar: var(--chart-bar);
+  --color-confidence-high: var(--confidence-high);
+  --color-confidence-mid: var(--confidence-mid);
+  --color-confidence-low: var(--confidence-low);
+  /* Radii use Tailwind's defaults, which match the system: rounded-sm 4px, rounded-md 6px, rounded-lg 8px, rounded-full pills. */
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+body {
+  background: var(--surface-page);
+  color: var(--text-strong);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Screen components (buttons, cards, badges, tables, meters), expressed with the tokens above. */
+@layer components {
+  .h1 { font-size: 30px; line-height: 40px; font-weight: 600; letter-spacing: -0.025em; margin: 0; }
+  .h2 { font-size: 24px; line-height: 32px; font-weight: 600; letter-spacing: -0.025em; margin: 0; }
+  .lead { font-size: 18px; line-height: 30px; color: var(--text-muted); margin: 0; }
+  .title { font-size: 14px; line-height: 20px; font-weight: 600; margin: 0; }
+  .p { margin: 0; color: var(--text-muted); }
+  .cap { font-size: 12px; line-height: 16px; color: var(--text-subtle); }
+  .lbl { font-size: 12px; line-height: 16px; font-weight: 500; color: var(--text-label); }
+  .mono { font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 13px; line-height: 20px; }
+  .eyebrow { font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent-text); margin-bottom: 4px; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 40px; padding: 0 20px; border-radius: 8px; font-size: 14px; line-height: 20px; font-weight: 600; border: 1px solid transparent; cursor: pointer; white-space: nowrap; transition: opacity 0.15s; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn:hover:not(:disabled) { opacity: 0.9; }
+  .btn.primary { background: var(--action); color: var(--on-action); }
+  .btn.accent { background: var(--accent); color: var(--on-accent); }
+  .btn.ghost { background: transparent; border-color: var(--border-control); color: var(--text-strong); }
+  .btn.sm { height: 32px; padding: 0 12px; font-size: 13px; }
+  .btn.lg { height: 48px; padding: 0 24px; font-size: 15px; }
+  .card { background: var(--surface-card); border: 1px solid var(--border); border-radius: 8px; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 9999px; font-size: 12px; line-height: 16px; font-weight: 500; white-space: nowrap; }
+  .badge.ok { color: var(--status-match); background: var(--status-match-soft); }
+  .badge.bad { color: var(--status-mismatch); background: var(--status-mismatch-soft); }
+  .badge.rev { color: var(--status-review); background: var(--accent-soft); }
+  .badge.neutral { color: var(--text-muted); background: var(--surface-inset); }
+  .chip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 6px; background: var(--surface-inset); color: var(--text-label); font-size: 12px; font-weight: 500; white-space: nowrap; }
+  .code { font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 0.92em; background: var(--code-fill); border-radius: 4px; padding: 1px 6px; }
+  .tbl { width: 100%; border-collapse: collapse; }
+  .tbl th { text-align: left; font-size: 12px; line-height: 16px; font-weight: 500; color: var(--text-label); padding: 12px 16px; background: var(--surface-inset); }
+  .tbl td { padding: 14px 16px; border-top: 1px solid var(--border); vertical-align: middle; }
+  .side { background: var(--brand-surface); color: var(--on-brand-muted); padding: 24px 16px; display: flex; flex-direction: column; gap: 32px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 15px; letter-spacing: -0.01em; padding: 0 8px; }
+  .side .brand { color: var(--on-brand); }
+  .brand i { display: block; width: 12px; height: 12px; border-radius: 3px; background: var(--accent); }
+  .nav { display: flex; flex-direction: column; gap: 4px; }
+  .nav a { display: flex; align-items: center; gap: 12px; height: 40px; padding: 0 12px; border-radius: 6px; color: var(--on-brand-muted); font-weight: 500; }
+  .nav a:hover { background: var(--brand-active); }
+  .nav a.on { background: var(--brand-active); color: var(--on-brand); }
+  .nav a.on svg { color: var(--accent); }
+  .nav .count { margin-left: auto; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 9999px; background: var(--accent); color: var(--on-accent); font-size: 12px; line-height: 22px; text-align: center; font-weight: 600; }
+  .user { margin-top: auto; display: flex; align-items: center; gap: 12px; padding: 16px 8px 0; border-top: 1px solid var(--brand-active); }
+  .user .title { color: var(--on-brand); }
+  .user .cap { color: var(--on-brand-muted); }
+  .avatar { width: 32px; height: 32px; border-radius: 9999px; background: var(--accent); color: var(--on-accent); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; flex: none; }
+  .main { padding: 32px 40px; display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+  .top { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
+  .row { display: flex; gap: 16px; align-items: center; }
+  .input { height: 40px; border: 1px solid var(--border-control); border-radius: 8px; background: var(--surface-card); padding: 0 12px; display: flex; align-items: center; gap: 8px; color: var(--text-strong); min-width: 0; font-size: 14px; }
+  .input::placeholder { color: var(--text-subtle); }
+  .seg { display: inline-flex; padding: 4px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-card); gap: 2px; flex-wrap: wrap; }
+  .seg > button, .seg > span { padding: 6px 14px; border-radius: 6px; font-weight: 500; color: var(--text-muted); font-size: 13px; line-height: 20px; transition: color 0.15s; }
+  .seg > button:hover { color: var(--text-strong); }
+  .seg > .on { background: var(--action); color: var(--on-action); }
+  .kpi { padding: 20px; display: flex; flex-direction: column; gap: 8px; }
+  .kpi .n { font-size: 30px; line-height: 36px; font-weight: 600; letter-spacing: -0.025em; }
+  .kpi .head { display: flex; justify-content: space-between; align-items: flex-start; }
+  .kicon { width: 36px; height: 36px; border-radius: 6px; display: flex; align-items: center; justify-content: center; background: var(--surface-inset); color: var(--text-label); }
+  .kicon.ok { background: var(--status-match-soft); color: var(--status-match); }
+  .kicon.bad { background: var(--status-mismatch-soft); color: var(--status-mismatch); }
+  .kicon.rev { background: var(--accent-soft); color: var(--accent-text); }
+  .stat { padding: 16px 20px; display: flex; flex-direction: column; gap: 4px; }
+  .bars { display: flex; flex-direction: column; gap: 12px; }
+  .bar { display: grid; grid-template-columns: 150px 1fr 44px; align-items: center; gap: 12px; font-size: 13px; }
+  .bar .track { height: 10px; border-radius: 9999px; background: var(--surface-inset); overflow: hidden; }
+  .bar .fill { height: 100%; border-radius: 9999px; background: var(--chart-bar); }
+  .bar .fill.hi { background: var(--accent); }
+  .bar .v { text-align: right; font-weight: 600; }
+  .dropzone { border: 1px dashed var(--border-control); border-radius: 8px; background: var(--surface-card); padding: 32px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+  .divider { height: 1px; background: var(--border); border: 0; margin: 0; }
+  .conf { display: inline-flex; align-items: center; gap: 8px; }
+  .conf b { font-size: 13px; line-height: 16px; font-weight: 600; min-width: 34px; font-variant-numeric: tabular-nums; }
+  .meter { display: block; width: 56px; height: 6px; border-radius: 9999px; background: var(--surface-inset); overflow: hidden; }
+  .meter i { display: block; height: 100%; border-radius: 9999px; }
+  .meter i.hi { background: var(--confidence-high); }
+  .meter i.mid { background: var(--confidence-mid); }
+  .meter i.lo { background: var(--confidence-low); }
+  .meter.lg { width: 100%; height: 10px; }
+  .hero { background: var(--brand-surface); color: var(--on-brand-muted); }
+  .hero .lead, .hero .cap { color: var(--on-brand-muted); }
+  .hero .brand { color: var(--on-brand); }
+  .hero .card { color: var(--text-strong); }
+  .hero .card .cap { color: var(--text-subtle); }
+  .hero .btn.ghost { color: var(--on-brand); border-color: var(--on-brand-muted); }
+  .dropicon { width: 56px; height: 56px; border-radius: 9999px; background: var(--accent-soft); color: var(--accent-text); display: flex; align-items: center; justify-content: center; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 9999px; background: var(--accent); }
+  .cell-link { font-weight: 500; text-decoration: underline; text-underline-offset: 3px; }
 }

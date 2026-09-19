@@ -16,9 +16,18 @@ export const env = {
     "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
   ),
-  googleClientId: required("GOOGLE_CLIENT_ID", process.env.GOOGLE_CLIENT_ID),
-  googleClientSecret: required("GOOGLE_CLIENT_SECRET", process.env.GOOGLE_CLIENT_SECRET),
-  googleRedirectUri: required("GOOGLE_REDIRECT_URI", process.env.GOOGLE_REDIRECT_URI),
-  sessionSecret: required("SESSION_SECRET", process.env.SESSION_SECRET),
-  googleRefreshToken: process.env.GOOGLE_REFRESH_TOKEN,
+  // Server-only secrets are getters so this module can be imported by client
+  // code (lib/supabase/client.ts) without throwing on their absence in the browser.
+  get googleClientId() {
+    return required("GOOGLE_CLIENT_ID", process.env.GOOGLE_CLIENT_ID);
+  },
+  get googleClientSecret() {
+    return required("GOOGLE_CLIENT_SECRET", process.env.GOOGLE_CLIENT_SECRET);
+  },
+  get googleRedirectUri() {
+    return required("GOOGLE_REDIRECT_URI", process.env.GOOGLE_REDIRECT_URI);
+  },
+  get googleRefreshToken() {
+    return process.env.GOOGLE_REFRESH_TOKEN;
+  },
 };
