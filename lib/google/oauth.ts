@@ -1,10 +1,10 @@
 import { google } from "googleapis";
-import { env } from "@/config/env";
+import { googleConfig } from "@/config/server-env";
 
 export function createOAuthClient() {
   return new google.auth.OAuth2(
-    env.googleClientId,
-    env.googleClientSecret,
-    env.googleRedirectUri,
+    googleConfig.clientId,
+    googleConfig.clientSecret,
+    googleConfig.redirectUri,
   );
 }

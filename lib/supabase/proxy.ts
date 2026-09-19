@@ -1,5 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
-import { env } from "@/config/env";
+import { supabaseConfig } from "@/config/env";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function updateSession(request: NextRequest) {
@@ -10,8 +10,8 @@ export async function updateSession(request: NextRequest) {
   // With Fluid compute, don't put this client in a global environment
   // variable. Always create a new one on each request.
   const supabase = createServerClient(
-    env.supabaseUrl,
-    env.supabasePublishableKey,
+    supabaseConfig.url,
+    supabaseConfig.publishableKey,
     {
       cookies: {
         getAll() {
@@ -57,7 +57,9 @@ export async function updateSession(request: NextRequest) {
     pathname === "/auth" ||
     pathname.startsWith("/auth/") ||
     pathname === "/instruments" ||
-    pathname.startsWith("/instruments/");
+    pathname.startsWith("/instruments/") ||
+    // Email processing API is open while testing
+    pathname === "/api/process-email";
 
   if (!user && !isPublic) {
     const redirect = pathname.startsWith("/api/")

@@ -5,6 +5,8 @@ import Link from "next/link";
 import { CheckCircle2, FolderOpen, Archive } from "lucide-react";
 import { toast } from "sonner";
 import type { UploadResponse } from "@/lib/upload/types";
+import type { InboxResult } from "@/lib/email-processing/types";
+import { ResultsTable } from "./results-table";
 
 type Mode = "zip" | "folders";
 
@@ -92,7 +94,8 @@ export function UploadForm() {
   const [attachmentFiles, setAttachmentFiles] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [dragging, setDragging] = useState(false);
-  const [summary, setSummary] = useState<{ title: string; notes: string[]; batchId: string } | null>(null);
+  const [results, setResults] = useState<InboxResult[] | null>(null);
+  const [summary, setSummary] = useState<{ title: string; notes: string[] } | null>(null);
 
   const inboxInputRef = useRef<HTMLInputElement | null>(null);
   const attachmentsInputRef = useRef<HTMLInputElement | null>(null);
@@ -157,7 +160,10 @@ export function UploadForm() {
 
     setIsSubmitting(true);
     setSummary(null);
-    const toastId: string | number = toast.loading("Uploading shipping data…");
+    setResults(null);
+    const toastId: string | number = toast.loading("Uploading and classifying emails…", {
+      description: "Large batches can take several minutes.",
+    });
 
     try {
       const res: Response = await fetch("/api/upload", {
@@ -181,11 +187,14 @@ export function UploadForm() {
       if (data.stats.junkCount > 0) {
         notes.push(`${data.stats.junkCount} OS metadata file(s) ignored`);
       }
-      const title = `Uploaded ${data.stats.emailCount} email${data.stats.emailCount === 1 ? "" : "s"} and ${
-        data.stats.attachmentCount
-      } attachment${data.stats.attachmentCount === 1 ? "" : "s"}.`;
-      toast.success(title, { id: toastId, description: `Batch ID: ${data.batchId}` });
-      setSummary({ title, notes, batchId: data.batchId });
+      const failedCount: number = data.results.filter((r) => !r.ok).length;
+      if (failedCount > 0) notes.push(`${failedCount} email(s) failed`);
+      const title = `Classified ${data.results.length - failedCount} of ${data.results.length} email${
+        data.results.length === 1 ? "" : "s"
+      } (${data.stats.attachmentCount} attachment${data.stats.attachmentCount === 1 ? "" : "s"}).`;
+      toast.success(title, { id: toastId, description: notes.join(" · ") || undefined });
+      setSummary({ title, notes });
+      setResults(data.results);
 
       setZipFile(null);
       setInboxFiles([]);
@@ -278,7 +287,7 @@ export function UploadForm() {
 
       <div className="flex items-center gap-3">
         <button type="submit" className="btn accent" disabled={!canSubmit || isSubmitting}>
-          {isSubmitting ? "Uploading…" : "Upload"}
+          {isSubmitting ? "Processing…" : "Upload and classify"}
         </button>
         <span className="cap">Nothing is checked until the upload finishes.</span>
       </div>
@@ -293,7 +302,7 @@ export function UploadForm() {
           <div>
             <div className="title">{summary.title}</div>
             <div className="cap text-text-muted">
-              {[...summary.notes, `Batch ID: ${summary.batchId}`].join(" · ")}
+              {summary.notes.join(" · ")}
             </div>
             <Link href="/batches" className="lbl mt-2 inline-block text-accent-text underline-offset-2 hover:underline">
               View batch results
@@ -301,6 +310,8 @@ export function UploadForm() {
           </div>
         </div>
       )}
+
+      {results && <ResultsTable results={results} />}
     </form>
   );
 }

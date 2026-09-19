@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
-import path from "path";
-import { mkdir } from "fs/promises";
-import { createBatchId, UPLOADS_ROOT } from "@/lib/upload/storage";
-import { extractZipEntries, writeEntriesToBatch, type RawEntry } from "@/lib/upload/extract";
+import { extractZipEntries, sortEntries, type RawEntry } from "@/lib/upload/extract";
 import type { UploadResponse } from "@/lib/upload/types";
+import { inboxEmailSchema, type InboxEmail } from "@/lib/email-classification/schemas";
+import { processInbox, type InboxResult } from "@/lib/email-processing";
 
 export const runtime = "nodejs";
 
@@ -20,12 +19,8 @@ export async function POST(request: Request) {
   }
 
   const mode = formData.get("mode");
-  const batchId: string = createBatchId();
-  const batchDir: string = path.join(UPLOADS_ROOT, batchId);
 
   try {
-    await mkdir(batchDir, { recursive: true });
-
     let entries: RawEntry[] = [];
 
     if (mode === "zip") {
@@ -50,24 +45,59 @@ export async function POST(request: Request) {
       return json({ success: false, error: "Unknown upload mode." }, 400);
     }
 
-    const stats = await writeEntriesToBatch(entries, batchDir);
+    const { inbox, attachments, stats } = sortEntries(entries);
 
-    if (stats.emailCount === 0 && stats.attachmentCount === 0) {
+    if (stats.emailCount === 0) {
       return json(
         {
           success: false,
           error:
-            "Nothing recognizable was found. Make sure the upload contains an 'inbox' folder and an 'attachments' folder.",
+            "No emails were found. Make sure the upload contains an 'inbox' folder with the email .json files.",
         },
         400
       );
     }
 
-    return json({ success: true, batchId, stats });
+    // Bad inbox files become error entries instead of failing the whole batch.
+    const slots: ({ email: InboxEmail } | InboxResult)[] = inbox.map(parseInboxEntry);
+    const emails = slots.flatMap((slot) => ("email" in slot ? [slot.email] : []));
+
+    // Emails reference attachments by their path from the upload root,
+    // e.g. "attachments/email_001_SI.txt", matched exactly.
+    const processed = await processInbox(
+      emails,
+      attachments.map((entry) => ({ filename: `attachments/${entry.relativePath}`, data: entry.buffer }))
+    );
+
+    let next = 0;
+    const results = slots.map((slot) => ("email" in slot ? processed[next++] : slot));
+
+    return json({ success: true, stats, results });
   } catch (error) {
+    console.error("Upload failed", error);
     const message: string = error instanceof Error ? error.message : "Unexpected server error.";
-    const isUnsafePath: boolean = message.startsWith("Rejected unsafe path");
-    if (!isUnsafePath) console.error("Upload failed", error);
-    return json({ success: false, error: message }, isUnsafePath ? 400 : 500);
+    return json({ success: false, error: message }, 500);
   }
+}
+
+function parseInboxEntry(entry: RawEntry): { email: InboxEmail } | InboxResult {
+  const failed = (error: string): InboxResult => ({ email_id: entry.relativePath, ok: false, error });
+
+  if (!entry.relativePath.toLowerCase().endsWith(".json")) {
+    return failed("Inbox files must be .json.");
+  }
+
+  let raw: unknown;
+  try {
+    raw = JSON.parse(entry.buffer.toString("utf8"));
+  } catch {
+    return failed("Not valid JSON.");
+  }
+
+  const parsed = inboxEmailSchema.safeParse(raw);
+  if (!parsed.success) {
+    const issues = parsed.error.issues.map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`);
+    return failed(`Invalid email: ${issues.join("; ")}`);
+  }
+  return { email: parsed.data };
 }

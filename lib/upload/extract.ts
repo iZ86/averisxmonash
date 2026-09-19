@@ -1,5 +1,4 @@
 import JSZip from "jszip";
-import { writeBatchFile } from "./storage";
 
 export type ExtractStats = {
   emailCount: number;
@@ -44,8 +43,18 @@ export async function extractZipEntries(zipBuffer: Buffer): Promise<RawEntry[]> 
   );
 }
 
-export async function writeEntriesToBatch(entries: RawEntry[], batchDir: string): Promise<ExtractStats> {
-  const stats = emptyStats();
+export type SortedUpload = {
+  /** Inbox JSON files; relativePath is the path inside inbox/. */
+  inbox: RawEntry[];
+  /** Attachment files; relativePath is the path inside attachments/. */
+  attachments: RawEntry[];
+  stats: ExtractStats;
+};
+
+/** Sorts uploaded entries into inbox and attachments in memory; nothing is written to disk. */
+export function sortEntries(entries: RawEntry[]): SortedUpload {
+  const sorted: SortedUpload = { inbox: [], attachments: [], stats: emptyStats() };
+  const { stats } = sorted;
 
   for (const entry of entries) {
     if (isJunkPath(entry.relativePath)) {
@@ -60,10 +69,10 @@ export async function writeEntriesToBatch(entries: RawEntry[], batchDir: string)
       continue;
     }
 
-    await writeBatchFile(batchDir, `${bucket}/${rest}`, entry.buffer);
+    sorted[bucket].push({ relativePath: rest, buffer: entry.buffer });
     if (bucket === "inbox") stats.emailCount += 1;
     else stats.attachmentCount += 1;
   }
 
-  return stats;
+  return sorted;
 }

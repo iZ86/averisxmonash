@@ -1,13 +1,13 @@
 import { google, type gmail_v1 } from "googleapis";
-import { env } from "@/config/env";
+import { googleConfig } from "@/config/server-env";
 import { createOAuthClient } from "@/lib/google/oauth";
 
 export type AttachmentRef = { filename: string; mimeType: string; attachmentId: string };
 
 export function createGmailClient() {
-  if (!env.googleRefreshToken) throw new Error("GOOGLE_REFRESH_TOKEN not set.");
+  if (!googleConfig.refreshToken) throw new Error("GOOGLE_REFRESH_TOKEN not set.");
   const auth = createOAuthClient();
-  auth.setCredentials({ refresh_token: env.googleRefreshToken });
+  auth.setCredentials({ refresh_token: googleConfig.refreshToken });
   return google.gmail({ version: "v1", auth });
 }
 
