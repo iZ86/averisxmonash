@@ -48,7 +48,10 @@ export async function updateSession(request: NextRequest) {
     !request.nextUrl.pathname.startsWith("/auth") &&
     // Instruments pages are public, no login needed
     request.nextUrl.pathname !== "/instruments" &&
-    !request.nextUrl.pathname.startsWith("/instruments/")
+    !request.nextUrl.pathname.startsWith("/instruments/") &&
+    // Upload pages/API are public, no login needed
+    !request.nextUrl.pathname.startsWith("/upload") &&
+    !request.nextUrl.pathname.startsWith("/api/upload")
   ) {
     // no user, potentially respond by redirecting the user to the login page
     const url = request.nextUrl.clone();
