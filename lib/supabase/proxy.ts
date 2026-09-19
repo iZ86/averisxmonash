@@ -41,21 +41,23 @@ export async function updateSession(request: NextRequest) {
   const { data } = await supabase.auth.getClaims();
   const user = data?.claims;
 
-  if (
-    request.nextUrl.pathname !== "/" &&
-    !user &&
-    !request.nextUrl.pathname.startsWith("/login") &&
-    !request.nextUrl.pathname.startsWith("/auth") &&
-    // Instruments pages are public, no login needed
-    request.nextUrl.pathname !== "/instruments" &&
-    !request.nextUrl.pathname.startsWith("/instruments/") &&
-    // Upload pages/API are public, no login needed
-    !request.nextUrl.pathname.startsWith("/upload") &&
-    !request.nextUrl.pathname.startsWith("/api/upload")
-  ) {
-    // no user, potentially respond by redirecting the user to the login page
+  const { pathname } = request.nextUrl;
+
+  // Signed-in users skip the landing page.
+  if (user && pathname === "/") {
     const url = request.nextUrl.clone();
-    url.pathname = "/auth/login";
+    url.pathname = "/dashboard";
+    return NextResponse.redirect(url);
+  }
+
+  // Everything except the landing page and the auth routes needs a session.
+  if (!user && pathname !== "/" && !pathname.startsWith("/auth")) {
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ success: false, error: "Sign in required." }, { status: 401 });
+    }
+    const url = request.nextUrl.clone();
+    url.pathname = "/";
+    url.search = "";
     return NextResponse.redirect(url);
   }
 
