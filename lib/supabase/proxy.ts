@@ -50,7 +50,10 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname !== "/instruments" &&
     !request.nextUrl.pathname.startsWith("/instruments/") &&
     // Email processing API is open while testing
-    request.nextUrl.pathname !== "/api/process-email"
+    request.nextUrl.pathname !== "/api/process-email" &&
+    // Upload pages/API are public, no login needed
+    !request.nextUrl.pathname.startsWith("/upload") &&
+    !request.nextUrl.pathname.startsWith("/api/upload")
   ) {
     // no user, potentially respond by redirecting the user to the login page
     const url = request.nextUrl.clone();
