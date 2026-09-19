@@ -87,7 +87,7 @@ const categoryResultSchema = z.object({
     .enum(STATUSES)
     .optional()
     .describe(
-      "BL_COMPARISON only. OK if all 7 fields match, MISMATCH if at least one differs, NEEDS_REVIEW if you cannot decide.",
+      "BL_COMPARISON only. OK if all 7 fields match, MISMATCH if at least one differs, NEEDS_REVIEW if the comparison cannot be made.",
     ),
   review_reason: z
     .enum(REVIEW_REASONS)
@@ -108,12 +108,12 @@ const classificationShape = z.object({
   reasoning: z
     .string()
     .describe(
-      "Step-by-step reasoning: what the email is about and, for a BL comparison, each of the 7 fields in the SI vs the BL.",
+      "Concise reasoning: why this category and how the status was reached. For a BL comparison, the SI and BL value of each of the 7 fields.",
     ),
   categories: z
     .array(categoryResultSchema)
     .describe(
-      "Only the categories that apply, each at most once. Leave out categories with confidence 0.",
+      "Each category at most once. Include plausible near-misses with honest scores; leave out categories with no connection to the email.",
     ),
 });
 
