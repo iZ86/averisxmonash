@@ -1,6 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  Inbox as InboxIcon,
+  Mail,
+  Paperclip,
+  Search,
+} from "lucide-react";
+import { PageHeader } from "@/components/ui";
 
 type Summary = {
   id: string;
@@ -27,6 +37,8 @@ type Message = {
 const senderName = (from: string | null) =>
   from?.replace(/<.*>/, "").replace(/"/g, "").trim() || from || "(unknown)";
 
+const initial = (from: string | null) => senderName(from).charAt(0).toUpperCase() || "?";
+
 const shortDate = (date: string | null) => {
   if (!date) return "";
   const d = new Date(date);
@@ -37,10 +49,19 @@ const shortDate = (date: string | null) => {
 
 async function getJson<T>(url: string): Promise<T> {
   const res = await fetch(url);
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.error ?? "Request failed");
-  return json;
+  // Read as text first: proxy/server failures can return an empty or non-JSON body.
+  const body = await res.text();
+  let json: { error?: string } | null = null;
+  try {
+    json = body ? JSON.parse(body) : null;
+  } catch {}
+  if (!res.ok || !json) {
+    throw new Error(json?.error ?? `Request failed (${res.status} ${res.statusText || "empty response"})`);
+  }
+  return json as T;
 }
+
+const ICON = { size: 16, strokeWidth: 1.75, "aria-hidden": true } as const;
 
 export default function Inbox() {
   const [query, setQuery] = useState("");
@@ -108,96 +129,136 @@ export default function Inbox() {
     setSearch(query.trim());
   }
 
-  const navButton =
-    "rounded px-2 py-1 hover:bg-black/5 disabled:opacity-30 dark:hover:bg-white/10";
+  const showDetail = selectedId !== null;
 
   return (
-    <div className="flex h-screen flex-col">
-      <header className="flex items-center gap-4 border-b border-black/10 px-4 py-2 dark:border-white/15">
-        <h1 className="text-xl font-medium">Inbox</h1>
-        <form onSubmit={submitSearch} className="flex-1">
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search mail (e.g. from:alice has:attachment)"
-            className="w-full max-w-2xl rounded-full bg-black/5 px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:bg-white/10"
-          />
-        </form>
-      </header>
+    <>
+      <PageHeader
+        eyebrow="Gmail inbox"
+        title="Inbox"
+        description="Browse and search the connected Gmail inbox."
+        actions={
+          <form onSubmit={submitSearch} role="search" className="input w-72 max-w-full">
+            <Search {...ICON} className="shrink-0 text-text-subtle" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              aria-label="Search mail"
+              placeholder="Search mail, e.g. from:alice"
+              className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-text-subtle"
+            />
+          </form>
+        }
+      />
 
-      <div className="flex min-h-0 flex-1">
-        <section className="flex w-full flex-col border-r border-black/10 md:w-[28rem] md:shrink-0 dark:border-white/15">
-          <div className="flex items-center justify-between border-b border-black/10 px-4 py-2 text-sm dark:border-white/15">
-            <span>
-              {search ? `Results for "${search}"` : "Inbox"} · page {page + 1}
+      <div className="card flex h-[calc(100vh-13rem)] min-h-[480px] overflow-hidden">
+        <section
+          className={`${showDetail ? "hidden md:flex" : "flex"} w-full flex-col border-border md:w-[26rem] md:shrink-0 md:border-r`}
+        >
+          <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
+            <span className="lbl truncate">
+              {search ? `Results for “${search}”` : "All mail"} · page {page + 1}
             </span>
-            <div className="flex gap-2">
+            <div className="flex gap-1">
               <button
+                aria-label="Newer messages"
                 disabled={page === 0 || listLoading}
                 onClick={() => setPages((p) => p.slice(0, -1))}
-                className={navButton}
+                className="btn ghost sm !px-2"
               >
-                ← Newer
+                <ChevronLeft {...ICON} />
               </button>
               <button
+                aria-label="Older messages"
                 disabled={!nextToken || listLoading}
                 onClick={() => nextToken && setPages((p) => [...p, nextToken])}
-                className={navButton}
+                className="btn ghost sm !px-2"
               >
-                Older →
+                <ChevronRight {...ICON} />
               </button>
             </div>
           </div>
 
           <ul className="flex-1 overflow-y-auto">
-            {listLoading && <li className="p-4 text-sm opacity-60">Loading…</li>}
-            {listError && <li className="p-4 text-sm text-red-600">{listError}</li>}
+            {listLoading && <li className="p-4 text-sm text-text-muted">Loading…</li>}
+            {listError && <li className="p-4 text-sm text-status-mismatch">{listError}</li>}
             {!listLoading && !listError && emails.length === 0 && (
-              <li className="p-4 text-sm opacity-60">No messages.</li>
+              <li className="flex flex-col items-center gap-2 p-10 text-center text-sm text-text-muted">
+                <InboxIcon size={24} strokeWidth={1.75} aria-hidden />
+                No messages.
+              </li>
             )}
             {!listLoading &&
-              emails.map((email) => (
-                <li key={email.id}>
-                  <button
-                    onClick={() => setSelectedId(email.id)}
-                    className={`block w-full border-b border-black/5 px-4 py-2 text-left text-sm hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10 ${
-                      selectedId === email.id ? "bg-blue-500/10" : ""
-                    }`}
-                  >
-                    <div className="flex justify-between gap-2">
-                      <span className={`truncate ${email.unread ? "font-bold" : ""}`}>
-                        {senderName(email.from)}
+              emails.map((email) => {
+                const active = selectedId === email.id;
+                return (
+                  <li key={email.id}>
+                    <button
+                      onClick={() => setSelectedId(email.id)}
+                      aria-current={active}
+                      className={`flex w-full gap-3 border-b border-l-2 border-b-border px-4 py-3 text-left hover:bg-surface-inset ${
+                        active ? "border-l-accent bg-surface-inset" : "border-l-transparent"
+                      }`}
+                    >
+                      <span className="avatar !bg-surface-inset !text-text-label" aria-hidden>
+                        {initial(email.from)}
                       </span>
-                      <span className="shrink-0 text-xs opacity-60">{shortDate(email.date)}</span>
-                    </div>
-                    <div className={`truncate ${email.unread ? "font-semibold" : ""}`}>
-                      {email.subject || "(no subject)"}
-                    </div>
-                    <div className="truncate text-xs opacity-60">{email.snippet}</div>
-                  </button>
-                </li>
-              ))}
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center justify-between gap-2">
+                          <span className="flex min-w-0 items-center gap-2">
+                            {email.unread && <span className="dot" role="img" aria-label="Unread" />}
+                            <span className={`title truncate ${email.unread ? "" : "!font-medium text-text-muted"}`}>
+                              {senderName(email.from)}
+                            </span>
+                          </span>
+                          <span className="cap shrink-0">{shortDate(email.date)}</span>
+                        </span>
+                        <span className={`block truncate text-sm ${email.unread ? "font-semibold" : ""}`}>
+                          {email.subject || "(no subject)"}
+                        </span>
+                        <span className="cap block truncate">{email.snippet}</span>
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
           </ul>
         </section>
 
-        <main className="hidden min-w-0 flex-1 flex-col overflow-y-auto md:flex">
-          {!selectedId && <p className="p-6 text-sm opacity-60">Select a message to read it.</p>}
-          {messageLoading && <p className="p-6 text-sm opacity-60">Loading…</p>}
-          {messageError && <p className="p-6 text-sm text-red-600">{messageError}</p>}
+        <div className={`${showDetail ? "flex" : "hidden md:flex"} min-w-0 flex-1 flex-col overflow-y-auto`}>
+          {showDetail && (
+            <button onClick={() => setSelectedId(null)} className="btn ghost sm m-4 mb-0 self-start md:hidden">
+              <ArrowLeft {...ICON} /> Back to inbox
+            </button>
+          )}
+          {!selectedId && (
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-sm text-text-muted">
+              <span className="dropicon">
+                <Mail size={24} strokeWidth={1.75} aria-hidden />
+              </span>
+              Select a message to read it.
+            </div>
+          )}
+          {messageLoading && <p className="p-6 text-sm text-text-muted">Loading…</p>}
+          {messageError && <p className="p-6 text-sm text-status-mismatch">{messageError}</p>}
           {message && (
-            <article className="flex flex-1 flex-col p-6">
-              <h2 className="mb-4 text-2xl">{message.subject || "(no subject)"}</h2>
-              <div className="mb-4 text-sm">
-                <div>
-                  <span className="font-semibold">{senderName(message.from)}</span>{" "}
-                  <span className="opacity-60">{message.from?.match(/<.*>/)?.[0]}</span>
+            <article className="flex flex-1 flex-col gap-4 p-6">
+              <h2 className="h2">{message.subject || "(no subject)"}</h2>
+              <div className="flex items-start gap-3">
+                <span className="avatar" aria-hidden>
+                  {initial(message.from)}
+                </span>
+                <div className="min-w-0 text-sm">
+                  <div>
+                    <span className="title">{senderName(message.from)}</span>{" "}
+                    <span className="cap">{message.from?.match(/<.*>/)?.[0]}</span>
+                  </div>
+                  {message.to && <div className="cap truncate">to {message.to}</div>}
+                  {message.cc && <div className="cap truncate">cc {message.cc}</div>}
+                  {message.date && <div className="cap">{new Date(message.date).toLocaleString()}</div>}
                 </div>
-                {message.to && <div className="opacity-60">to {message.to}</div>}
-                {message.cc && <div className="opacity-60">cc {message.cc}</div>}
-                {message.date && (
-                  <div className="opacity-60">{new Date(message.date).toLocaleString()}</div>
-                )}
               </div>
+              <hr className="divider" />
 
               {message.html ? (
                 // No allow-scripts: untrusted email HTML must never run code here.
@@ -205,26 +266,22 @@ export default function Inbox() {
                   title="Email body"
                   sandbox="allow-popups allow-popups-to-escape-sandbox"
                   srcDoc={`<base target="_blank"><body style="font-family:Arial,sans-serif;color:#222;background:#fff">${message.html}</body>`}
-                  className="min-h-96 w-full flex-1 rounded border border-black/10 bg-white"
+                  className="min-h-96 w-full flex-1 rounded-lg border border-border bg-white"
                 />
               ) : (
-                <pre className="whitespace-pre-wrap font-sans text-sm">{message.text}</pre>
+                <pre className="whitespace-pre-wrap font-sans text-sm text-text-strong">{message.text}</pre>
               )}
 
               {message.attachments.length > 0 && (
-                <div className="mt-4 border-t border-black/10 pt-4 dark:border-white/15">
-                  <h3 className="mb-2 text-sm font-semibold">
-                    {message.attachments.length} attachment
-                    {message.attachments.length > 1 ? "s" : ""}
+                <div className="border-t border-border pt-4">
+                  <h3 className="lbl mb-2">
+                    {message.attachments.length} attachment{message.attachments.length > 1 ? "s" : ""}
                   </h3>
                   <ul className="flex flex-wrap gap-2">
                     {message.attachments.map((a) => (
                       <li key={a.downloadUrl}>
-                        <a
-                          href={a.downloadUrl}
-                          className="block rounded border border-black/15 px-3 py-2 text-sm hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
-                        >
-                          📎 {a.filename}
+                        <a href={a.downloadUrl} className="btn ghost sm">
+                          <Paperclip {...ICON} /> {a.filename}
                         </a>
                       </li>
                     ))}
@@ -233,8 +290,8 @@ export default function Inbox() {
               )}
             </article>
           )}
-        </main>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
