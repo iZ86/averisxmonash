@@ -3,6 +3,8 @@
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import type { UploadResponse } from "@/lib/upload/types";
+import type { InboxResult } from "@/lib/email-processing/types";
+import { ResultsTable } from "./results-table";
 
 type Mode = "zip" | "folders";
 
@@ -44,6 +46,7 @@ export function UploadForm() {
   const [inboxFiles, setInboxFiles] = useState<File[]>([]);
   const [attachmentFiles, setAttachmentFiles] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [results, setResults] = useState<InboxResult[] | null>(null);
 
   const inboxInputRef = useRef<HTMLInputElement | null>(null);
   const attachmentsInputRef = useRef<HTMLInputElement | null>(null);
@@ -107,7 +110,10 @@ export function UploadForm() {
     }
 
     setIsSubmitting(true);
-    const toastId: string | number = toast.loading("Uploading shipping data…");
+    setResults(null);
+    const toastId: string | number = toast.loading("Uploading and classifying emails…", {
+      description: "Large batches can take several minutes.",
+    });
 
     try {
       const res: Response = await fetch("/api/upload", {
@@ -131,14 +137,16 @@ export function UploadForm() {
       if (data.stats.junkCount > 0) {
         notes.push(`${data.stats.junkCount} OS metadata file(s) ignored`);
       }
-      notes.push(`Batch ID: ${data.batchId}`);
+      const failedCount: number = data.results.filter((r) => !r.ok).length;
+      if (failedCount > 0) notes.push(`${failedCount} email(s) failed`);
 
       toast.success(
-        `Uploaded ${data.stats.emailCount} email${data.stats.emailCount === 1 ? "" : "s"} and ${
-          data.stats.attachmentCount
-        } attachment${data.stats.attachmentCount === 1 ? "" : "s"}.`,
-        { id: toastId, description: notes.join(" · ") },
+        `Classified ${data.results.length - failedCount} of ${data.results.length} email${
+          data.results.length === 1 ? "" : "s"
+        } (${data.stats.attachmentCount} attachment${data.stats.attachmentCount === 1 ? "" : "s"}).`,
+        { id: toastId, description: notes.join(" · ") || undefined },
       );
+      setResults(data.results);
 
       setZipFile(null);
       setInboxFiles([]);
@@ -257,8 +265,10 @@ export function UploadForm() {
         disabled={!canSubmit || isSubmitting}
         className="inline-flex w-fit items-center gap-2 rounded-lg bg-zinc-900 px-5 py-2.5 text-sm font-semibold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40 dark:bg-zinc-50 dark:text-black"
       >
-        {isSubmitting ? "Uploading…" : "Upload"}
+        {isSubmitting ? "Processing…" : "Upload and classify"}
       </button>
+
+      {results && <ResultsTable results={results} />}
     </form>
   );
 }

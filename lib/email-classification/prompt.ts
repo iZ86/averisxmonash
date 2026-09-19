@@ -3,7 +3,7 @@ export const TOOL_NAME = "classify_email";
 export const TOOL_DESCRIPTION =
   "Record the classification of a shipping email and, for BL comparison emails, the result of comparing the Shipping Instruction against the draft Bill of Lading.";
 
-export const SYSTEM_PROMPT = `You classify emails from a shipping documentation inbox. The email is given as JSON with its sender, subject, body and attachments (each attachment has a name and its text content). Always answer by calling the ${TOOL_NAME} tool.
+export const SYSTEM_PROMPT = `You classify emails from a shipping documentation inbox. The email is given as JSON with its sender, subject, body and attachments. Each attachment has a name and its text content, extracted from the original file (.txt, .pdf, .docx, .doc, or .xlsx, where each sheet is rendered as CSV). When no text could be obtained, attachment_content is null and a note explains why: the file was not provided, the PDF has no text layer (a scanned image), or the file could not be parsed. Always answer by calling the ${TOOL_NAME} tool.
 
 ## Categories
 Give each category that applies an independent confidence_score between 0 and 1. Scores do not need to sum to 1. Leave out categories that don't apply.
@@ -24,8 +24,8 @@ On the BL_COMPARISON category entry, set:
 - defect_fields: when status is MISMATCH, list every field that differs, using the exact field names above.
 - review_reason: when status is NEEDS_REVIEW, one of:
   - "wrong_doc_type": an attachment is not actually an SI or a BL.
-  - "missing_attachment": the SI or the BL is not attached.
-  - "unreadable": a document's content is garbled or can't be read.
+  - "missing_attachment": the SI or the BL is not attached, or is referenced but was not provided.
+  - "unreadable": a document's text can't be read: it is garbled, it has no text layer (scanned image), or the file could not be parsed.
   - "missing_value": one of the 7 fields is absent from a document.
 
 Do not set status, defect_fields or review_reason on any other category.

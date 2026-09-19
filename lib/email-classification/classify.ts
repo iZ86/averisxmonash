@@ -8,7 +8,7 @@ import {
   findActiveBl,
   type Classification,
   type ClassificationResponse,
-  type EmailInput,
+  type ClassifierInput,
 } from "./schemas";
 
 // One retry when the model returns a missing or invalid tool call.
@@ -26,7 +26,7 @@ export class ClassificationError extends Error {
   }
 }
 
-export async function classifyEmail(email: EmailInput): Promise<ClassificationResponse> {
+export async function classifyEmail(email: ClassifierInput): Promise<ClassificationResponse> {
   const failures: string[] = [];
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
@@ -40,7 +40,7 @@ export async function classifyEmail(email: EmailInput): Promise<ClassificationRe
 
 type Outcome = { ok: true; classification: Classification } | { ok: false; error: string };
 
-async function requestClassification(email: EmailInput): Promise<Outcome> {
+async function requestClassification(email: ClassifierInput): Promise<Outcome> {
   const result = await openRouter.chat.send({
     chatRequest: {
       model: openRouterConfig.model,
@@ -63,6 +63,15 @@ async function requestClassification(email: EmailInput): Promise<Outcome> {
       // Only route to providers that support tools + a forced tool_choice.
       provider: { requireParameters: true },
     },
+  }, {
+    // Rate limits and provider overloads are common when running many emails in
+    // parallel, so back off and retry them instead of failing the email.
+    retries: {
+      strategy: "backoff",
+      backoff: { initialInterval: 2_000, maxInterval: 30_000, exponent: 2, maxElapsedTime: 120_000 },
+      retryConnectionErrors: true,
+    },
+    retryCodes: ["429", "5XX"],
   });
 
   if (!("choices" in result)) return { ok: false, error: "unexpected streaming response" };

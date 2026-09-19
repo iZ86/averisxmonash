@@ -44,7 +44,35 @@ export const emailInputSchema = z.object({
     .default([]),
 });
 
-export type EmailInput = z.infer<typeof emailInputSchema>;
+// What the classifier sends to the LLM. An attachment whose text couldn't be
+// obtained has `attachment_content: null` and a `note` saying why (not
+// provided, no text layer, parse error), so the model can judge it.
+export type ClassifierAttachment = {
+  attachment_name: string;
+  attachment_content: string | null;
+  note?: string;
+};
+
+export type ClassifierInput = {
+  email_id: string;
+  from: string;
+  subject: string;
+  body: string;
+  attachments: ClassifierAttachment[];
+};
+
+// ---- Inbox upload (Phase 2) ----
+
+// An email JSON from the uploaded inbox folder: attachments are filenames.
+export const inboxEmailSchema = z.object({
+  email_id: z.string(),
+  from: z.string(),
+  subject: z.string(),
+  body: z.string(),
+  attachments: z.array(z.string()).default([]),
+});
+
+export type InboxEmail = z.infer<typeof inboxEmailSchema>;
 
 // ---- LLM tool arguments ----
 

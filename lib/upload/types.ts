@@ -1,3 +1,5 @@
+import type { InboxResult } from "@/lib/email-processing/types";
+
 export type UploadStats = {
   emailCount: number;
   attachmentCount: number;
@@ -7,5 +9,5 @@ export type UploadStats = {
 };
 
 export type UploadResponse =
-  | { success: true; batchId: string; stats: UploadStats; }
+  | { success: true; stats: UploadStats; results: InboxResult[]; }
   | { success: false; error: string; };
