@@ -16,4 +16,8 @@ export const env = {
     "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
   ),
+  googleClientId: required("GOOGLE_CLIENT_ID", process.env.GOOGLE_CLIENT_ID),
+  googleClientSecret: required("GOOGLE_CLIENT_SECRET", process.env.GOOGLE_CLIENT_SECRET),
+  googleRedirectUri: required("GOOGLE_REDIRECT_URI", process.env.GOOGLE_REDIRECT_URI),
+  googleRefreshToken: process.env.GOOGLE_REFRESH_TOKEN,
 };
