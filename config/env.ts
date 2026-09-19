@@ -19,5 +19,6 @@ export const env = {
   googleClientId: required("GOOGLE_CLIENT_ID", process.env.GOOGLE_CLIENT_ID),
   googleClientSecret: required("GOOGLE_CLIENT_SECRET", process.env.GOOGLE_CLIENT_SECRET),
   googleRedirectUri: required("GOOGLE_REDIRECT_URI", process.env.GOOGLE_REDIRECT_URI),
+  sessionSecret: required("SESSION_SECRET", process.env.SESSION_SECRET),
   googleRefreshToken: process.env.GOOGLE_REFRESH_TOKEN,
 };

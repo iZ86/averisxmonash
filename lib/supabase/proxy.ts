@@ -46,7 +46,9 @@ export async function updateSession(request: NextRequest) {
     !user &&
     !request.nextUrl.pathname.startsWith("/login") &&
     !request.nextUrl.pathname.startsWith("/auth") &&
-    !request.nextUrl.pathname.startsWith("/api/emails/") &&
+    // TODO: temporary, remove once the mailbox is behind a login (exposes the mailbox)
+    !request.nextUrl.pathname.startsWith("/api/emails") &&
+    request.nextUrl.pathname !== "/inbox" &&
     // Instruments pages are public, no login needed
     request.nextUrl.pathname !== "/instruments" &&
     !request.nextUrl.pathname.startsWith("/instruments/") &&

@@ -11,10 +11,10 @@ export function createGmailClient() {
   return google.gmail({ version: "v1", auth });
 }
 
-// Walks the MIME tree collecting the plain-text body and attachment references,
-// in a stable order (so the index of an attachment identifies it).
+// Walks the MIME tree collecting the plain-text/HTML bodies and attachment
+// references, in a stable order (so the index of an attachment identifies it).
 export function parseMessage(payload: gmail_v1.Schema$MessagePart | undefined) {
-  const out = { text: "", attachments: [] as AttachmentRef[] };
+  const out = { text: "", html: "", attachments: [] as AttachmentRef[] };
   const walk = (part: gmail_v1.Schema$MessagePart | undefined) => {
     if (!part) return;
     if (part.filename && part.body?.attachmentId) {
@@ -25,9 +25,17 @@ export function parseMessage(payload: gmail_v1.Schema$MessagePart | undefined) {
       });
     } else if (part.mimeType === "text/plain" && part.body?.data) {
       out.text += Buffer.from(part.body.data, "base64url").toString("utf8");
+    } else if (part.mimeType === "text/html" && part.body?.data) {
+      out.html += Buffer.from(part.body.data, "base64url").toString("utf8");
     }
     part.parts?.forEach(walk);
   };
   walk(payload);
   return out;
+}
+
+export function getHeader(payload: gmail_v1.Schema$MessagePart | undefined, name: string) {
+  return (
+    payload?.headers?.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value ?? null
+  );
 }
