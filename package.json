@@ -19,6 +19,7 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "sonner": "^2.0.8",
+    "unpdf": "^1.8.1",
     "word-extractor": "^1.0.4",
     "zod": "^4.6.5"
   },
