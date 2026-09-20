@@ -264,9 +264,8 @@ export function BatchesWorkspace() {
       if (selectedId) setParams({ email: null });
       return;
     }
-    if (!selectedId || !rows.some((r) => r.id === selectedId)) {
-      setParams({ email: rows[0].id });
-    }
+    // A deep-linked email may sit on a later page, so only pick a default when nothing is selected.
+    if (!selectedId) setParams({ email: rows[0].id });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, listLoading]);
 
