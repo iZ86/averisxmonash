@@ -59,7 +59,10 @@ export async function updateSession(request: NextRequest) {
     pathname === "/instruments" ||
     pathname.startsWith("/instruments/") ||
     // Email processing API is open while testing
-    pathname === "/api/process-email";
+    pathname === "/api/process-email" ||
+    // Gmail push + its renewal cron have no user session; each route verifies
+    // its own credential (Pub/Sub OIDC token / CRON_SECRET).
+    pathname.startsWith("/api/gmail/");
 
   if (!user && !isPublic) {
     const redirect = pathname.startsWith("/api/")
