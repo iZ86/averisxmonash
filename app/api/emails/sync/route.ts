@@ -1,4 +1,5 @@
 import "server-only";
+import { errorMessage } from "@/lib/errors";
 import { NextResponse } from "next/server";
 import type { gmail_v1 } from "googleapis";
 import { createClient } from "@/lib/supabase/server";
@@ -77,7 +78,7 @@ export async function POST() {
         const { data } = await fetchWithBackoff(() => gmail.users.messages.get({ userId: "me", id, format: "full" }));
         return { ok: true as const, data };
       } catch (error) {
-        return { ok: false as const, error: error instanceof Error ? error.message : String(error) };
+        return { ok: false as const, error: errorMessage(error) };
       }
     });
     const fetchFailureCount = fetchOutcomes.filter((r) => !r.ok).length;
@@ -153,7 +154,7 @@ export async function POST() {
     await finishSync(supabase, userId, "ok", note, fetchFailureCount === 0 ? nextHistoryId : null);
     return json({ success: true, inserted: inserted.length, skipped: existingRows.length, failed: fetchFailureCount, syncedAt: new Date().toISOString() });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     const reconnect = /invalid_grant|GOOGLE_REFRESH_TOKEN|invalid_client/i.test(message);
     await finishSync(supabase, userId, "error", message);
     return json({ success: false, error: reconnect ? "Google sign-in has expired. Reconnect your Google account." : message, reconnect }, 502);

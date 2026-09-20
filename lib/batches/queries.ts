@@ -42,7 +42,7 @@ function fromViewRow(row: BatchEmailViewRow, attachments: AttachmentRow[] = [], 
     attachments: attachments
       .slice()
       .sort((a, b) => a.position - b.position)
-      .map((a) => ({ filename: a.filename, mimeType: a.mime_type })),
+      .map((a) => ({ id: a.id, filename: a.filename, mimeType: a.mime_type, sizeBytes: a.size_bytes })),
   };
 }
 
@@ -117,18 +117,23 @@ export async function getBatchStats(supabase: SupabaseClient): Promise<BatchStat
 }
 
 export async function getBatchEmailDetail(supabase: SupabaseClient, id: string): Promise<BatchEmail | null> {
-  const { data: viewRow, error: viewError } = await supabase
-    .from("batch_emails")
-    .select(
-      "id, subject, from_address, snippet, received_at, logged_at, is_unread, status, review_reason, defect_fields, reasoning, result, overall_confidence, classification_confidence, category",
-    )
-    .eq("id", id)
-    .maybeSingle();
+  const [{ data: viewRow, error: viewError }, { data: attachments, error: attError }] = await Promise.all([
+    supabase
+      .from("batch_emails")
+      .select(
+        "id, subject, from_address, snippet, received_at, logged_at, is_unread, status, review_reason, defect_fields, reasoning, result, overall_confidence, classification_confidence, category",
+      )
+      .eq("id", id)
+      .maybeSingle(),
+    // Metadata only (no extracted text): enough to know whether to show the Attachments tab.
+    supabase.from("email_attachments").select("id, email_id, filename, mime_type, size_bytes, position").eq("email_id", id),
+  ]);
 
   if (viewError) throw viewError;
+  if (attError) throw attError;
   if (!viewRow) return null;
 
-  return fromViewRow(viewRow as unknown as BatchEmailViewRow);
+  return fromViewRow(viewRow as unknown as BatchEmailViewRow, (attachments ?? []) as AttachmentRow[]);
 }
 
 export async function getBatchEmailContent(
@@ -151,7 +156,7 @@ export async function getBatchEmailContent(
     attachments: ((attachments ?? []) as AttachmentRow[])
       .slice()
       .sort((a, b) => a.position - b.position)
-      .map((a) => ({ filename: a.filename, mimeType: a.mime_type })),
+      .map((a) => ({ id: a.id, filename: a.filename, mimeType: a.mime_type, sizeBytes: a.size_bytes })),
   };
 }
 

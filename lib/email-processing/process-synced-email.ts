@@ -3,10 +3,12 @@ import type { gmail_v1 } from "googleapis";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { parseMessage } from "@/lib/google/gmail";
 import { toClassifierAttachment } from "./extract-text";
+import { attachmentPath, uploadAttachment } from "./attachment-storage";
 import { processEmail } from "./index";
 
 type SyncedEmail = {
   id: string;
+  user_id: string;
   gmail_message_id: string;
   from_address: string;
   subject: string;
@@ -36,6 +38,19 @@ export async function processSyncedEmail(
     attachmentBuffers.map((attachment) => toClassifierAttachment({ filename: attachment.filename, data: attachment.data })),
   );
 
+  const storagePaths = await Promise.all(
+    attachmentBuffers.map((attachment, index) =>
+      attachment.data
+        ? uploadAttachment(
+            supabase,
+            attachmentPath(email.user_id, email.id, index, attachment.filename),
+            attachment.data,
+            attachment.mimeType,
+          )
+        : null,
+    ),
+  );
+
   if (attachmentBuffers.length > 0) {
     const { error } = await supabase.from("email_attachments").insert(
       attachmentBuffers.map((attachment, index) => ({
@@ -47,9 +62,10 @@ export async function processSyncedEmail(
         extracted_text: extracted[index].attachment_content,
         extraction_note: extracted[index].note ?? null,
         position: index,
+        storage_path: storagePaths[index],
       })),
     );
-    if (error) throw error;
+    if (error) throw new Error(`Saving attachments: ${error.message}`);
   }
 
   const result = await processEmail({
@@ -69,5 +85,5 @@ export async function processSyncedEmail(
     defect_fields: result.defect_fields,
     categories: result.categories,
   });
-  if (error) throw error;
+  if (error) throw new Error(`Saving analysis: ${error.message}`);
 }

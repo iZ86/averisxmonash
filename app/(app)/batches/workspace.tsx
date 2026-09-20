@@ -26,6 +26,7 @@ import type { BatchEmail } from "@/lib/batches/types";
 import { ListPanel } from "./list-panel";
 import { DetailHeader, type DetailTab } from "./detail-header";
 import { ComparisonView } from "./comparison-view";
+import { AttachmentsView } from "./attachments-view";
 import { ReviewView } from "./review-view";
 import {
   PendingView,
@@ -88,8 +89,9 @@ export function BatchesWorkspace() {
   const [contentLoadedFor, setContentLoadedFor] = useState<string | null>(null);
   const detailLoading = !!selectedId && detail?.id !== selectedId;
   const [detailTab, setDetailTab] = useState<DetailTab>("analysis");
-  const contentLoading =
-    detailTab === "email" && contentLoadedFor !== selectedId;
+  const [attachmentId, setAttachmentId] = useState<string | null>(null);
+  const needsContent = detailTab === "email" || detailTab === "attachments";
+  const contentLoading = needsContent && contentLoadedFor !== selectedId;
 
   function setParams(
     next: Record<string, string | null>,
@@ -281,6 +283,7 @@ export function BatchesWorkspace() {
         setContentLoadedFor(null);
         if (e) {
           setDetailTab(defaultDetailTab());
+          setAttachmentId(null);
           if (e.isUnread) {
             markEmailRead(supabase, e.id).then(() => {
               setRows((prev) =>
@@ -304,7 +307,7 @@ export function BatchesWorkspace() {
   }, [supabase, selectedId]);
 
   useEffect(() => {
-    if (!selectedId || detailTab !== "email" || contentLoadedFor === selectedId)
+    if (!selectedId || !needsContent || contentLoadedFor === selectedId)
       return;
     let cancelled = false;
     getBatchEmailContent(supabase, selectedId)
@@ -325,7 +328,7 @@ export function BatchesWorkspace() {
     return () => {
       cancelled = true;
     };
-  }, [supabase, selectedId, detailTab, contentLoadedFor]);
+  }, [supabase, selectedId, needsContent, contentLoadedFor]);
 
   async function onSync() {
     if (syncing) return;
@@ -573,12 +576,25 @@ export function BatchesWorkspace() {
                 <div className="card p-8 text-center text-text-muted">
                   Loading…
                 </div>
-              ) : detailTab === "email" && contentLoading ? (
+              ) : needsContent && contentLoading ? (
                 <div className="card p-8 text-center text-text-muted">
                   Loading email content…
                 </div>
               ) : detailTab === "email" ? (
-                <EmailView email={displayedDetail} />
+                <EmailView
+                  email={displayedDetail}
+                  onOpenAttachment={(id) => {
+                    setAttachmentId(id);
+                    setDetailTab("attachments");
+                  }}
+                />
+              ) : detailTab === "attachments" ? (
+                <AttachmentsView
+                  email={displayedDetail}
+                  selectedId={attachmentId}
+                  onSelect={setAttachmentId}
+                  onBackToEmail={() => setDetailTab("email")}
+                />
               ) : displayedDetail.result === "needs_review" ? (
                 <ReviewView email={displayedDetail} onResolved={onResolved} />
               ) : displayedDetail.result === "mismatch" ||

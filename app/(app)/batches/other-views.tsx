@@ -34,7 +34,7 @@ export function NotComparedView({ email }: { email: BatchEmail }) {
       {email.attachments.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {email.attachments.map((a) => (
-            <span className="chip" key={a.filename}><File {...ICON} /> {a.filename}</span>
+            <span className="chip" key={a.id}><File {...ICON} /> {a.filename}</span>
           ))}
         </div>
       )}
@@ -61,7 +61,7 @@ export function FailedView({ email, onRetry, retrying }: { email: BatchEmail; on
   );
 }
 
-export function EmailView({ email }: { email: BatchEmail }) {
+export function EmailView({ email, onOpenAttachment }: { email: BatchEmail; onOpenAttachment: (id: string) => void }) {
   return (
     <article className="card flex flex-col gap-5 p-6">
       <div className="flex items-center gap-3">
@@ -79,7 +79,15 @@ export function EmailView({ email }: { email: BatchEmail }) {
           <span className="cap">{email.attachments.length} {email.attachments.length === 1 ? "attachment" : "attachments"}</span>
           <div className="flex flex-wrap gap-2">
             {email.attachments.map((a) => (
-              <span className="chip" key={a.filename}><File {...ICON} /> {a.filename}</span>
+              <button
+                type="button"
+                className="chip cursor-pointer underline-offset-2 hover:underline"
+                key={a.id}
+                title="Open in the Attachments tab"
+                onClick={() => onOpenAttachment(a.id)}
+              >
+                <File {...ICON} /> {a.filename}
+              </button>
             ))}
           </div>
         </div>

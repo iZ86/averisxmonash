@@ -64,6 +64,7 @@ export type AttachmentRow = {
   filename: string;
   mime_type: string | null;
   size_bytes: number | null;
+  storage_path: string | null;
   extracted_text: string | null;
   extraction_note: string | null;
   position: number;
@@ -98,7 +99,7 @@ export type BatchEmail = {
   /** Set only when result === "failed". */
   error: string | null;
 
-  attachments: { filename: string; mimeType: string | null }[];
+  attachments: { id: string; filename: string; mimeType: string | null; sizeBytes: number | null }[];
 
   /** Per-field SI/BL values + confidence. Not populated by the current
    * classification pipeline (v1 ships without them) — always empty today, kept

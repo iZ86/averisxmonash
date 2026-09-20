@@ -14,7 +14,7 @@ const STATUS_LABEL: Record<string, string> = {
   no_mismatch: "Processed",
 };
 
-export type DetailTab = "analysis" | "email";
+export type DetailTab = "analysis" | "email" | "attachments";
 
 export function DetailHeader({
   email,
@@ -70,8 +70,19 @@ export function DetailHeader({
           onClick={() => onTabChange("email")}
           className={`-mb-px border-b-2 px-0.5 py-2.5 font-medium ${tab === "email" ? "border-accent text-text-strong" : "border-transparent text-text-muted hover:text-text-strong"}`}
         >
-          Email{email.attachments.length > 0 && <small className="ml-1 text-text-subtle">{email.attachments.length} {email.attachments.length === 1 ? "attachment" : "attachments"}</small>}
+          Email
         </button>
+        {email.attachments.length > 0 && (
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "attachments"}
+          onClick={() => onTabChange("attachments")}
+          className={`-mb-px border-b-2 px-0.5 py-2.5 font-medium ${tab === "attachments" ? "border-accent text-text-strong" : "border-transparent text-text-muted hover:text-text-strong"}`}
+        >
+          Attachments<small className="ml-1 text-text-subtle">{email.attachments.length}</small>
+        </button>
+        )}
       </div>
     </>
   );

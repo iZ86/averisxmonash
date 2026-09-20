@@ -2,6 +2,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createGmailClient, fetchWithBackoff } from "@/lib/google/gmail";
+import { errorMessage } from "@/lib/errors";
 import { processSyncedEmail } from "@/lib/email-processing/process-synced-email";
 
 export const runtime = "nodejs";
@@ -25,7 +26,7 @@ export async function POST() {
 
     const { data: email, error: emailError } = await supabase
       .from("emails")
-      .select("id, gmail_message_id, from_address, subject, body")
+      .select("id, user_id, gmail_message_id, from_address, subject, body")
       .eq("id", emailId)
       .eq("user_id", userId)
       .maybeSingle();
@@ -40,7 +41,7 @@ export async function POST() {
       await markJob(supabase, emailId, "completed", null);
       processed++;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorMessage(error);
       await supabase.from("processed_emails").insert({
         email_id: emailId,
         synced_email_id: emailId,
