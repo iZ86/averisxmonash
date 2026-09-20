@@ -21,12 +21,11 @@ export const REVIEW_REASON_TEXT: Record<ReviewReason, { label: string; hint: str
   missing_value: { label: "Missing value", hint: "One of the 7 fields is empty or N/A" },
 };
 
-// No column tracks a completed review yet; wire this up once one exists.
 const REVIEWS_COMPLETED = 0;
 
 interface ProcessedRow {
   email_id: string;
-  status: "OK" | "MISMATCH" | "NEEDS_REVIEW";
+  status: "OK" | "MISMATCH" | "NEEDS_REVIEW" | "FAILED";
   review_reason: ReviewReason | null;
   defect_fields: string[] | null;
   categories: { category: CategoryCode; confidence_score: number }[] | null;
@@ -56,10 +55,10 @@ export interface BarRow {
   highlight?: boolean;
 }
 
-/** Mirrors findActiveBl: BL_COMPARISON wins when it holds the top score (ties count as BL). */
-function topCategory(categories: ProcessedRow["categories"]): CategoryCode {
+// Returns null if the categories array is empty or NULL in Supabase
+function topCategory(categories: ProcessedRow["categories"]): CategoryCode | null {
   const scored = (categories ?? []).filter((c) => c.confidence_score > 0);
-  if (scored.length === 0) return "GENERAL";
+  if (scored.length === 0) return null;
   const max = Math.max(...scored.map((c) => c.confidence_score));
   if (scored.some((c) => c.category === "BL_COMPARISON" && c.confidence_score >= max)) return "BL_COMPARISON";
   return scored.find((c) => c.confidence_score === max)!.category;
@@ -79,6 +78,7 @@ export async function getDashboardData() {
       .select("id,gmail_message_id,subject,from_address,received_at")
       .returns<EmailRow[]>(),
   ]);
+
   if (processed.error) throw new Error(`processed_emails: ${processed.error.message}`);
   if (emails.error) throw new Error(`emails: ${emails.error.message}`);
 
@@ -94,9 +94,19 @@ export async function getDashboardData() {
   const mismatchQueue: QueueItem[] = [];
   const results = { noMismatch: 0, mismatch: 0, needsReview: 0 };
 
+  let pendingCount = 0; // Track rows with NULL categories
+
   for (const row of processed.data) {
     const category = topCategory(row.categories);
+    
+    // If no category could be determined, count as pending
+    if (!category) {
+      pendingCount++;
+      continue;
+    }
+
     categoryCount.set(category, (categoryCount.get(category) ?? 0) + 1);
+
     if (category !== "BL_COMPARISON") continue;
 
     const email = emailByKey.get(row.email_id);
@@ -123,11 +133,13 @@ export async function getDashboardData() {
 
   const comparisonRequests = results.noMismatch + results.mismatch + results.needsReview;
 
+  // Append Pending Classification to the bottom of the chart
   const byCategory: BarRow[] = [
     { label: CATEGORY_NAME.BL_COMPARISON, value: categoryCount.get("BL_COMPARISON") ?? 0, highlight: true },
     ...CATEGORIES.filter((c) => c !== "BL_COMPARISON")
       .map((c) => ({ label: CATEGORY_NAME[c], value: categoryCount.get(c) ?? 0 }))
       .sort((a, b) => b.value - a.value),
+    { label: "Pending Classification", value: pendingCount } 
   ];
 
   const byField: BarRow[] = [...fieldCount]
@@ -142,7 +154,6 @@ export async function getDashboardData() {
     withMismatch: results.mismatch,
     awaitingReview: results.needsReview,
     reviewsCompleted: REVIEWS_COMPLETED,
-    // Mapped = every comparison that could be decided, i.e. everything except needs-review.
     shipmentsMapped: results.noMismatch + results.mismatch,
     byCategory,
     byField,
