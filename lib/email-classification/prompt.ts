@@ -15,14 +15,15 @@ Categorise by what the sender is asking for, not by what happens to be attached.
 | BL_COMPARISON | a draft BL checked against an SI | "please review the attached draft B/L", "confirm before we release", "check against our SI" |
 | SI_REQUEST | shipping instructions taken in so a BL can be produced | "please find our SI for booking X", "kindly issue draft B/L"; SI alone, nothing to check |
 | INVOICE_QUERY | anything about money | freight invoice, charges, demurrage/detention billing, credit note, payment status, disputed amount |
-| GENERAL | legitimate business that is none of the above | vessel ETA, schedules, booking confirmation, cut-off times, account questions |
+| GENERAL | anything that is none of the above | notifications, reminders, chasers, status reports, internal admin, greetings, schedules, ETAs |
 | SPAM | nothing legitimate | marketing blasts, phishing, no real relationship with the sender |
 
 Rules:
-- Intent beats attachments. An email asking for a draft BL to be verified is BL_COMPARISON even if nothing is attached; it then resolves to NEEDS_REVIEW / missing_attachment. Do not demote it to GENERAL.
+- Intent beats attachments. An email asking for a draft BL to be verified is BL_COMPARISON even if nothing is attached. This includes an email asking us to send our draft BL so the sender can check it against their SI: the comparison is under way, we are just at a different point in it. Do not demote it to GENERAL.
+- Doing, not mentioning. A category applies when the email actually does that job: an SI is provided, a comparison is asked for, a question about money is raised, the mail is illegitimate. Mentioning, reminding, chasing or reporting on one of those is not the thing itself. A reminder to submit SIs is not an SI_REQUEST; a list of outstanding BLs is not a BL_COMPARISON; a bot announcing that a billing job finished is not an INVOICE_QUERY.
 - A comparable pair beats a submission. If an email both submits an SI and attaches a draft BL for checking, BL_COMPARISON wins: there is something to compare.
 - SPAM overrides topic. Phishing dressed as an invoice is SPAM, not INVOICE_QUERY. The test is legitimacy, not subject matter.
-- GENERAL is the fallback, not a "mixed" bucket. If an email genuinely has two jobs, score both high and let the higher one win.
+- GENERAL is a positive answer, not a leftover bin. It is what an email is when its job is not one of the other four. Score it on what the email actually is, like any other category: an email plainly doing none of the four jobs is plainly GENERAL, and should score high.
 
 Scoring: give each category a confidence_score from 0 to 1. Scores are independent and do not need to sum to 1; the highest-scoring category is the decision. Include plausible near-misses with honest scores (e.g. 0.3–0.5) rather than zeroing them, so ambiguity stays visible. Leave out categories with no connection to the email at all.
 
@@ -32,22 +33,24 @@ Set status, review_reason and defect_fields only on the BL_COMPARISON category e
 A BL comparison needs exactly one Shipping Instruction (SI) and one draft Bill of Lading (BL). Identify each document by its content, never by its file name or file type.
 
 status:
-- "OK": all 7 fields match. Leave defect_fields and review_reason unset.
-- "MISMATCH": one or more fields differ. List every differing field in defect_fields, not just the first one found. Leave review_reason unset.
-- "NEEDS_REVIEW": the comparison cannot be made. Set review_reason. Leave defect_fields unset.
+- "OK": all 7 fields match, or nothing has gone wrong with the documents (see below). Leave defect_fields and review_reason unset.
+- "MISMATCH": one or more fields differ. List every differing field in defect_fields, not just the first one found, in alphabetical order. Leave review_reason unset.
+- "NEEDS_REVIEW": something has gone wrong with the documents. Set review_reason. Leave defect_fields unset.
 
 A differing field is a MISMATCH. An absent field is NEEDS_REVIEW, never a mismatch.
 
-review_reason (when status is NEEDS_REVIEW):
-- "missing_attachment": nothing is attached for one of the two roles: no SI, no draft BL, or nothing at all. This includes a file that is referenced but was not provided.
-- "wrong_doc_type": something is attached, but it is not the document the comparison needs. This covers a commercial invoice, packing list or any other document standing in for the SI or BL, and also two SIs (no BL) or two BLs (no SI). Judge by content: a file named like a BL whose content is an invoice is wrong_doc_type.
-- "unreadable": the file will not open, or it opens to something no one can read: corrupt, encrypted, a blank or scanned image with no text layer, or garbled output.
+A review_reason describes something that has gone wrong. The comparison needs two roles filled: one SI and one draft BL. Set a review_reason only when one of these is true:
+- "missing_attachment": the email presents the documents as attached or already sent, and a role is empty. Either role can be the empty one, and both may be. Example: "Please compare the SI and draft BL ... (attachments appear to have been dropped)" with nothing attached, or the same request with only the SI attached.
+- "wrong_doc_type": a role is filled, but with the wrong document. Any other kind of document sent in the SI's or draft BL's place is wrong_doc_type, not missing_attachment: a commercial invoice, packing list, certificate of origin, bank document, a second SI, a second BL, or anything else. This still applies when the document says so itself (e.g. "NOT AN SI OR BL"): a file was supplied for that role, so the role is filled with the wrong document, not empty. Judge by content, never by file name or file type.
+- "unreadable": a document is there but cannot be read: the file will not open, or it opens to something no one can read (corrupt, encrypted, a blank or scanned image with no text layer, garbled output).
 - "missing_value": both documents are present and readable, but one of the 7 fields has no value on one side: "N/A", a blank, an empty rule ("_______"), or a label with nothing after it ("Gross Weight:").
+
+If none of these is true, leave status as "OK" with review_reason and defect_fields unset. In particular, an email asking for a document to be sent that has not arrived yet is not a problem: nothing was promised and nothing is broken. "Please assist to send the draft BL for X for checking" with nothing attached is BL_COMPARISON with status "OK".
 
 ## The 7 compared fields
 shipper, consignee, notify_party, port_of_loading, port_of_discharge, container_count, gross_weight_kg
 
-Use these exact snake_case names in defect_fields, never the label printed on the document.
+Use these exact snake_case names in defect_fields, never the label printed on the document, and list them in alphabetical order.
 
 The documents routinely label the same field differently. Align by meaning, not header text:
 
@@ -63,10 +66,11 @@ The documents routinely label the same field differently. Align by meaning, not 
 
 The right-hand column matters: reading Place of Receipt as Port of Loading, or a package count as the container count, are the most common sources of false results.
 
-Matching values:
+Matching values. The label tells you which field a value belongs to; a defect can only be in the value. A label difference is never a defect, and neither is a qualifier inside a label: "Shipper (Principal or Seller)", "Consignee (Non-Negotiable)" and "Notify Party/Intermediate Consignee" name the field, they do not describe the party. (A value absent on one side is not a defect either; that is missing_value.)
 - If two values mean the same thing, they match. Label differences, letter case, punctuation and unequal detail are not defects: "NHAVA SHEVA, INDIA" and "NHAVA SHEVA, INDIA (INNSA)" are the same place, and a party given by name on one document and by name plus full address on the other is the same party.
-- If any part of a value differs, the field is a defect. A matching location code does not rescue a differing place name: "BUSAN, SOUTH KOREA (AUFRE)" vs "FREMANTLE, AUSTRALIA (AUFRE)" is a port_of_discharge defect. Don't work out which document is right; if they disagree, the field is defective.
-- gross_weight_kg: weights are always in kg. Compare the numbers exactly, digit by digit (e.g. 72,450 vs 72,540 is a defect). Formatting such as thousands separators or "KG" vs "KGS" does not matter.
+- If any part of a value differs, the field is a defect. Don't work out which document is right; if they disagree, the field is defective.
+- Ports: the place name and the code must both match. The place name must match, and when both documents print a location code, the codes must match too; if either differs the field is a defect. A code printed on only one side is not a difference. "APAPA, NIGERIA (NGAPP)" vs "BALTIMORE, US (NGAPP)" is a defect (the code matches, the place does not); "NHAVA SHEVA, INDIA" vs "NHAVA SHEVA, INDIA (INNSA)" is a match.
+- gross_weight_kg: weights are always in kg. Also report each document's weight as a plain number in si_gross_weight_kg and bl_gross_weight_kg (e.g. "72,450.00 KG" -> 72450), copying the digits carefully; those two numbers are compared exactly, so formatting such as thousands separators or "KG" vs "KGS" does not matter.
 - container_count: compare the number of containers only (e.g. "3 x 40HC" and "3 X 40' HIGH CUBE" both mean 3).
 
 ## Reasoning

@@ -99,6 +99,15 @@ const categoryResultSchema = z.object({
     .describe(
       "BL_COMPARISON only, and only when status is MISMATCH: the fields whose SI and BL values differ.",
     ),
+  // Compared in code: two long weights differing in one digit read as equal to a model.
+  si_gross_weight_kg: z
+    .number()
+    .nullish()
+    .describe("BL_COMPARISON only: the SI's gross weight as a plain number in kg (e.g. \"72,450.00 KG\" -> 72450)."),
+  bl_gross_weight_kg: z
+    .number()
+    .nullish()
+    .describe("BL_COMPARISON only: the draft BL's gross weight as a plain number in kg."),
 });
 
 export type CategoryResult = z.infer<typeof categoryResultSchema>;
@@ -145,6 +154,7 @@ export const classificationSchema = classificationShape.superRefine((value, ctx)
   } else if (bl.status === "NEEDS_REVIEW" && !bl.review_reason) {
     ctx.addIssue({ code: "custom", message: "status NEEDS_REVIEW requires review_reason" });
   }
+
 });
 
 export type Classification = z.infer<typeof classificationSchema>;
