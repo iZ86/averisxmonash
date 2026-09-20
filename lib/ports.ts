@@ -11,6 +11,18 @@ export const PORTS: Record<string, { name: string; country: string; lat: number;
   AEJEA: { name: "Jebel Ali", country: "AE", lat: 25.01, lng: 55.06 },
 };
 
+/** ISO 3166-1 alpha-2 -> country name as spelled in the world-atlas map data. */
+export const COUNTRY_NAME: Record<string, string> = {
+  MY: "Malaysia",
+  SG: "Singapore",
+  CN: "China",
+  NL: "Netherlands",
+  DE: "Germany",
+  US: "United States of America",
+  AU: "Australia",
+  AE: "United Arab Emirates",
+};
+
 export type Coordinates = { lat: number; lng: number };
 
 /** Returns null when the port cannot be resolved so the UI can show "location unknown". */

@@ -29,8 +29,8 @@ export function ShipmentsView({ shipments }: { shipments: Shipment[] }) {
     () =>
       selected && entry && exit
         ? {
-            entry: { lat: entry.lat, lng: entry.lng, label: selected.entryPort },
-            exit: { lat: exit.lat, lng: exit.lng, label: selected.exitPort },
+            entry: { lat: entry.lat, lng: entry.lng, label: selected.entryPort, country: entry.country },
+            exit: { lat: exit.lat, lng: exit.lng, label: selected.exitPort, country: exit.country },
           }
         : null,
     [selected, entry, exit],
