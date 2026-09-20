@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { Coordinates } from "@/lib/ports";
-import { COUNTRY_NAME, greatCircle } from "@/lib/ports";
+import countries from "@/lib/geo/countries.json";
+import { greatCircle } from "@/lib/ports";
 
 export type GlobeRoute = {
   entry: Coordinates & { label: string; country?: string };
@@ -127,13 +128,15 @@ export function ShipmentGlobe({ route, ariaLabel }: { route: GlobeRoute | null; 
     (g.globeMaterial() as unknown as { color: { set: (c: string) => void } }).color.set(sea);
     const entryLand = "#e0802f";
     const exitLand = "#2b9fe0";
-    const nameOf = (d: object) => (d as { properties?: { name?: string } }).properties?.name;
-    const entryName = route?.entry.country ? COUNTRY_NAME[route.entry.country] : undefined;
-    const exitName = route?.exit.country ? COUNTRY_NAME[route.exit.country] : undefined;
+    // Map features carry the ISO 3166-1 numeric code as their id ("068"), so match on that.
+    const idOf = (d: object) => String((d as { id?: string | number }).id ?? "").padStart(3, "0");
+    const numeric = (iso2?: string) => (iso2 ? (countries as Record<string, { num: string | null }>)[iso2]?.num : undefined);
+    const entryId = numeric(route?.entry.country);
+    const exitId = numeric(route?.exit.country);
     g.polygonCapColor((d) => {
-      const n = nameOf(d);
-      if (n && n === entryName) return entryLand;
-      if (n && n === exitName) return exitLand;
+      const id = idOf(d);
+      if (id === entryId) return entryLand;
+      if (id === exitId) return exitLand;
       return land;
     }).polygonStrokeColor(() => border);
     g.atmosphereColor(dark ? "#5f86c9" : "#7f9bcc");
