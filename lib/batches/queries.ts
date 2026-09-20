@@ -173,6 +173,18 @@ export async function getSyncStatus(supabase: SupabaseClient): Promise<SyncStatu
   return { syncing: !stale };
 }
 
+/** Emails synced but not yet classified — a fire-and-forget trigger to
+ * /api/emails/process-queue can get cut short (tab closed/navigated before it
+ * finishes), leaving jobs stuck at "pending" with nothing resuming them. This
+ * lets the UI notice and re-trigger processing on load. */
+export async function getPendingQueueCount(supabase: SupabaseClient): Promise<number> {
+  const { count } = await supabase
+    .from("email_processing_queue")
+    .select("email_id", { count: "exact", head: true })
+    .eq("status", "pending");
+  return count ?? 0;
+}
+
 export async function getLastSyncedAt(supabase: SupabaseClient): Promise<string | null> {
   const { data: state } = await supabase.from("email_sync_state").select("last_synced_at").maybeSingle();
   if (state?.last_synced_at) return state.last_synced_at as string;

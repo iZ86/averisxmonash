@@ -16,6 +16,7 @@ import {
   getBatchEmailDetail,
   getBatchStats,
   getLastSyncedAt,
+  getPendingQueueCount,
   getSyncStatus,
   listBatchEmails,
   markEmailRead,
@@ -82,6 +83,7 @@ export function BatchesWorkspace() {
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  const [queueProcessing, setQueueProcessing] = useState(false);
   const [detail, setDetail] = useState<BatchEmail | null>(null);
   const [contentLoadedFor, setContentLoadedFor] = useState<string | null>(null);
   const detailLoading = !!selectedId && detail?.id !== selectedId;
@@ -176,6 +178,49 @@ export function BatchesWorkspace() {
     }, 3000);
     return () => clearInterval(interval);
   }, [syncing, supabase, refreshList, refreshStats]);
+
+  // Triggering /api/emails/process-queue is fire-and-forget from the browser:
+  // it claims and classifies queued emails one at a time in a single long
+  // request, which can run for a while (Gmail fetch + attachment extraction +
+  // an LLM call per email). Without keepalive, navigating away or refreshing
+  // mid-run drops that connection and leaves the rest of the queue stuck at
+  // "pending" with nothing resuming it. keepalive helps it survive a
+  // same-tab navigation; the mount check below additionally notices and
+  // resumes any jobs left stranded by a previous run that didn't.
+  const triggerQueueProcessing = useCallback(() => {
+    setQueueProcessing(true);
+    void fetch("/api/emails/process-queue", {
+      method: "POST",
+      keepalive: true,
+    });
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    getPendingQueueCount(supabase).then((n) => {
+      if (cancelled) return;
+      if (n > 0) triggerQueueProcessing();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, triggerQueueProcessing]);
+
+  // While jobs are queued, refresh periodically so "Queued for classification"
+  // rows update as each one completes, without a manual reload.
+  useEffect(() => {
+    if (!queueProcessing) return;
+    const interval = setInterval(async () => {
+      const n = await getPendingQueueCount(supabase);
+      if (n === 0) {
+        setQueueProcessing(false);
+        await Promise.all([refreshList(), refreshStats()]);
+        return;
+      }
+      await refreshList();
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [queueProcessing, supabase, refreshList, refreshStats]);
 
   useEffect(() => {
     let cancelled = false;
@@ -315,7 +360,7 @@ export function BatchesWorkspace() {
       } else {
         toast.success(summary);
       }
-      void fetch("/api/emails/process-queue", { method: "POST" });
+      if (data.inserted > 0) triggerQueueProcessing();
     } catch (err) {
       toast.error("Could not reach the server.", {
         description: err instanceof Error ? err.message : String(err),
