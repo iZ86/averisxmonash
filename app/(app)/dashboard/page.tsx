@@ -1,17 +1,18 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, CheckCircle2, Flag, Globe, Inbox, Mail, ShieldCheck, Upload } from "lucide-react";
-import { PageHeader, SampleBadge, Confidence, ResultBadge } from "@/components/ui";
-import { AUTO_ACCEPT_THRESHOLD } from "@/lib/confidence";
-import { getReviewCases, stats } from "@/lib/mock/data";
+import { AlertTriangle, ArrowRight, CheckCircle2, ClipboardCheck, Flag, Globe, Inbox, Mail } from "lucide-react";
+import { PageHeader, ResultBadge } from "@/components/ui";
+import { getDashboardData, type BarRow, type QueueItem } from "@/lib/dashboard";
 
 export const metadata: Metadata = { title: "Dashboard · Averis x Monash" };
+export const dynamic = "force-dynamic";
 
-const pct = (part: number, whole: number) => `${Math.round((part / whole) * 100)}%`;
+const pct = (part: number, whole: number) => (whole === 0 ? "0%" : `${Math.round((part / whole) * 100)}%`);
 const ICON = { size: 18, strokeWidth: 1.75, "aria-hidden": true } as const;
+const shortDate = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 
-function Bars({ rows }: { rows: { label: string; value: number; highlight?: boolean }[] }) {
-  const max = Math.max(...rows.map((r) => r.value));
+function Bars({ rows }: { rows: BarRow[] }) {
+  const max = Math.max(...rows.map((r) => r.value), 1);
   return (
     <div className="bars">
       {rows.map((r) => (
@@ -27,14 +28,59 @@ function Bars({ rows }: { rows: { label: string; value: number; highlight?: bool
   );
 }
 
-export default function DashboardPage() {
-  const s = stats;
-  const total = s.results.noMismatch + s.results.mismatch + s.results.needsReview;
-  const differing = s.byField.reduce((n, f) => n + f.value, 0);
-  const review = getReviewCases();
+function Queue({
+  title,
+  href,
+  cta,
+  items,
+  empty,
+  badge,
+}: {
+  title: string;
+  href: string;
+  cta: string;
+  items: QueueItem[];
+  empty: string;
+  badge: "needs_review" | "mismatch";
+}) {
+  return (
+    <div className="card overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4">
+        <h2 className="title">{title}</h2>
+        <Link className="btn ghost sm" href={href}>{cta}</Link>
+      </div>
+      {items.length === 0 && <div className="cap border-t border-border px-5 py-4">{empty}</div>}
+      {items.slice(0, 3).map((c) => (
+        <Link
+          key={c.id}
+          href={href}
+          className="flex items-center justify-between gap-4 border-t border-border px-5 py-3 hover:bg-surface-inset"
+        >
+          <div>
+            <div className="font-medium">{c.subject}</div>
+            <div className="cap">
+              {badge === "needs_review"
+                ? c.reason ? `${c.reason.label}: ${c.reason.hint}` : "Needs a person"
+                : `Differs on ${c.fields.join(", ")}`}
+            </div>
+          </div>
+          <div className="flex items-center gap-5">
+            <span className="cap">{shortDate(c.at)}</span>
+            <ResultBadge result={badge} />
+            <ArrowRight size={16} strokeWidth={1.75} aria-hidden className="text-text-subtle" />
+          </div>
+        </Link>
+      ))}
+    </div>
+  );
+}
 
-  // Empty state once real data is wired: no batches yet.
-  if (s.emailsProcessed === 0) {
+export default async function DashboardPage() {
+  const s = await getDashboardData();
+  const total = s.comparisonRequests || 1;
+  const differing = s.byField.reduce((n, f) => n + f.value, 0);
+
+  if (s.emailsProcessed === 0 && s.emailsTotal === 0) {
     return (
       <>
         <PageHeader eyebrow="Overview" title="Dashboard" description="What Averis x Monash has processed from your inbox." />
@@ -49,12 +95,12 @@ export default function DashboardPage() {
   }
 
   const kpis = [
-    { label: "Emails processed", n: s.emailsProcessed.toLocaleString(), cap: "Across all categories", icon: <Mail {...ICON} /> },
+    { label: "Emails processed", n: s.emailsProcessed.toLocaleString(), cap: `Of ${s.emailsTotal.toLocaleString()} emails in your inbox`, icon: <Mail {...ICON} /> },
     { label: "Comparison requests", n: s.comparisonRequests, cap: `${pct(s.comparisonRequests, s.emailsProcessed)} of emails`, icon: <Inbox {...ICON} /> },
     { label: "With a mismatch", n: s.withMismatch, cap: `${pct(s.withMismatch, s.comparisonRequests)} of requests`, icon: <AlertTriangle {...ICON} />, tone: "bad" },
     { label: "Awaiting review", n: s.awaitingReview, cap: "Needs a person", icon: <Flag {...ICON} />, tone: "rev", accent: true },
-    { label: "Shipments mapped", n: s.shipmentsMapped, cap: "Checked, with ports", icon: <Globe {...ICON} /> },
-    { label: "Avg. confidence", n: `${s.avgConfidence}%`, cap: `Below ${AUTO_ACCEPT_THRESHOLD}% goes to review`, icon: <ShieldCheck {...ICON} />, tone: "ok" },
+    { label: "Reviews completed", n: s.reviewsCompleted, cap: "Resolved by a person", icon: <ClipboardCheck {...ICON} />, tone: "ok" },
+    { label: "Shipments mapped", n: s.shipmentsMapped, cap: `${pct(s.shipmentsMapped, s.comparisonRequests)} of comparison requests`, icon: <Globe {...ICON} /> },
   ];
 
   return (
@@ -63,15 +109,7 @@ export default function DashboardPage() {
         eyebrow="Overview"
         title="Dashboard"
         description="What Averis x Monash has processed from your inbox."
-        actions={
-          <>
-            <SampleBadge />
-            <span className="chip">Last 30 days</span>
-            <Link className="btn accent" href="/upload">
-              <Upload size={16} strokeWidth={1.75} aria-hidden /> Upload data
-            </Link>
-          </>
-        }
+        actions={<span className="chip">Last 30 days</span>}
       />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 2xl:grid-cols-6">
@@ -100,7 +138,7 @@ export default function DashboardPage() {
             <h2 className="title">Mismatches by field</h2>
             <p className="cap">{differing} differing fields across {s.withMismatch} reports.</p>
           </div>
-          <Bars rows={s.byField} />
+          {s.byField.length > 0 ? <Bars rows={s.byField} /> : <p className="cap">No mismatches found.</p>}
         </div>
       </div>
 
@@ -127,29 +165,22 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="card overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4">
-          <h2 className="title">Needs your review, lowest confidence first</h2>
-          <Link className="btn ghost sm" href="/review">Open review queue</Link>
-        </div>
-        {review.slice(0, 3).map((c) => (
-          <Link
-            key={c.emailId}
-            href="/review"
-            className="flex items-center justify-between gap-4 border-t border-border px-5 py-3 hover:bg-surface-inset"
-          >
-            <div>
-              <div className="font-medium">{c.subject}</div>
-              <div className="cap">{c.reviewReason}</div>
-            </div>
-            <div className="flex items-center gap-5">
-              <Confidence score={c.confidence} />
-              <ResultBadge result="needs_review" />
-              <ArrowRight size={16} strokeWidth={1.75} aria-hidden className="text-text-subtle" />
-            </div>
-          </Link>
-        ))}
-      </div>
+      <Queue
+        title="Needs your review, oldest first"
+        href="/review"
+        cta="Open review queue"
+        items={s.reviewQueue}
+        empty="Nothing waiting for review."
+        badge="needs_review"
+      />
+      <Queue
+        title="Mismatches, oldest first"
+        href="/batches"
+        cta="Open all batches"
+        items={s.mismatchQueue}
+        empty="No mismatches found."
+        badge="mismatch"
+      />
     </>
   );
 }
