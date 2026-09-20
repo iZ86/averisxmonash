@@ -26,10 +26,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       suppressHydrationWarning
     >
       <head>
-        {/* Apply a saved theme before first paint to avoid a flash. */}
+        {/* Apply saved theme + sidebar-collapsed state before first paint to avoid a flash. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}`,
+            __html: `try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}try{if(localStorage.getItem("sidebar-collapsed")==="true")document.documentElement.setAttribute("data-sidebar-collapsed","true")}catch(e){}`,
           }}
         />
       </head>

@@ -11,7 +11,13 @@ import type { Category, Result } from "@/lib/types";
 const ICON = { size: 14, strokeWidth: 1.75, "aria-hidden": true } as const;
 
 /** Meter + number. Low scores are always labelled "Low"; `showLabel` labels every level. */
-export function Confidence({ score, showLabel = false }: { score: number | null; showLabel?: boolean }) {
+export function Confidence({
+  score,
+  showLabel = false,
+}: {
+  score: number | null;
+  showLabel?: boolean;
+}) {
   if (score === null) return <span className="cap">n/a</span>;
   const level = confidenceLevel(score);
   return (
@@ -20,19 +26,29 @@ export function Confidence({ score, showLabel = false }: { score: number | null;
         <i className={LEVEL_METER[level]} style={{ width: `${score}%` }} />
       </span>
       <b>{score}%</b>
-      {(showLabel || level === "low") && <span className="cap">{LEVEL_LABEL[level]}</span>}
+      {(showLabel || level === "low") && (
+        <span className="cap">{LEVEL_LABEL[level]}</span>
+      )}
     </span>
   );
 }
 
 /** Large confidence figure with a full-width meter, used for the summary cards. */
-export function ConfidenceStat({ label, score }: { label: string; score: number }) {
+export function ConfidenceStat({
+  label,
+  score,
+}: {
+  label: string;
+  score: number;
+}) {
   const level = confidenceLevel(score);
   return (
     <div className="card stat">
       <span className="lbl">{label}</span>
       <div className="flex items-baseline gap-2">
-        <span className={`text-[30px] leading-9 font-semibold tracking-[-0.025em] ${LEVEL_TEXT[level]}`}>
+        <span
+          className={`text-[30px] leading-9 font-semibold tracking-[-0.025em] ${LEVEL_TEXT[level]}`}
+        >
           {score}%
         </span>
         <span className="cap font-medium">{LEVEL_LABEL[level]}</span>
@@ -55,7 +71,7 @@ export function ResultBadge({ result }: { result: Result }) {
       );
     case "mismatch":
       return (
-        <span className="badge bad">
+        <span className="badge mismatch">
           <AlertTriangle {...ICON} /> {label}
         </span>
       );
@@ -67,8 +83,14 @@ export function ResultBadge({ result }: { result: Result }) {
       );
     case "failed":
       return (
-        <span className="badge bad">
+        <span className="badge failed">
           <XCircle {...ICON} /> {label}
+        </span>
+      );
+    case "not_compared":
+      return (
+        <span className="badge not-compared">
+          <Flag {...ICON} /> {label}
         </span>
       );
     default:
@@ -93,7 +115,13 @@ type PageHeaderProps = {
   breadcrumb?: React.ReactNode;
 };
 
-export function PageHeader({ eyebrow, title, description, actions, breadcrumb }: PageHeaderProps) {
+export function PageHeader({
+  eyebrow,
+  title,
+  description,
+  actions,
+  breadcrumb,
+}: PageHeaderProps) {
   return (
     <>
       {breadcrumb}
