@@ -1,6 +1,6 @@
 // Typed mock data so every screen renders before the pipeline exists.
 // Swap these accessors for real queries later; the types in ../types stay the same.
-import type { Category, EmailResult, Field, FieldComparison, Result, Shipment } from "../types";
+import type { Category, EmailResult, Field, FieldComparison, Result } from "../types";
 
 export const FIELD_LABEL: Record<Field, string> = {
   shipper: "Shipper",
@@ -241,11 +241,3 @@ export const stats = {
   ],
   results: { noMismatch: 265, mismatch: 38, needsReview: 9 },
 };
-
-export const shipments: Shipment[] = [
-  { id: "SHP-001", emailId: "e-001", entryPort: "Port Klang", entryLocode: "MYPKG", exitPort: "Rotterdam", exitLocode: "NLRTM", distanceKm: 10240, containers: "3 / 4", grossWeightKg: 22000, shipper: "Northwind Traders Sdn Bhd", consignee: "Fjord Imports BV", result: "mismatch", confidence: 94 },
-  { id: "SHP-002", emailId: "e-005", entryPort: "Shanghai", entryLocode: "CNSHA", exitPort: "Los Angeles", exitLocode: "USLAX", distanceKm: 10456, containers: "3", grossWeightKg: 18400, shipper: "Eastbridge Trading Co", consignee: "Pacific Rim Imports", result: "no_mismatch", confidence: 96 },
-  { id: "SHP-003", emailId: "e-002", entryPort: "Singapore", entryLocode: "SGSIN", exitPort: "Hamburg", exitLocode: "DEHAM", distanceKm: 10148, containers: "—", grossWeightKg: null, shipper: "Northwind Traders Sdn Bhd", consignee: "Elbe Handel GmbH", result: "needs_review", confidence: 58 },
-  { id: "SHP-004", emailId: "e-005", entryPort: "Port Klang", entryLocode: "MYPKG", exitPort: "Melbourne", exitLocode: "AUMEL", distanceKm: 6375, containers: "3", grossWeightKg: 21300, shipper: "Harbor Goods Sdn Bhd", consignee: "Southern Cross Pty", result: "no_mismatch", confidence: 92 },
-  { id: "SHP-005", emailId: "e-005", entryPort: "Penang", entryLocode: "MYPEN", exitPort: "Jebel Ali", exitLocode: "AEJEA", distanceKm: 5289, containers: "3", grossWeightKg: 19750, shipper: "Penang Textiles Bhd", consignee: "Gulf Distribution FZE", result: "no_mismatch", confidence: 95 },
-];

@@ -54,18 +54,41 @@ export interface EmailResult {
   evidence?: { si: string[]; bl: string[]; flagged?: Field };
 }
 
+export interface ShipmentPort {
+  name: string;
+  /** ISO 3166-1 alpha-2. */
+  country: string;
+  countryName: string;
+  lat: number;
+  lng: number;
+}
+
 export interface Shipment {
   id: string;
-  emailId: string;
+  /** Short reference shown in the UI. */
+  label: string;
+  emailId: string | null;
+  /** From the source email; null when the email can't be found. */
+  subject: string | null;
+  sender: string | null;
+  receivedAt: string | null;
+  /** Display names; the resolved port name, or the text as written when it could not be placed. */
   entryPort: string;
-  entryLocode: string;
   exitPort: string;
-  exitLocode: string;
-  distanceKm: number;
-  containers: string;
+  /** Port text exactly as stored on the shipping invoice. */
+  entryText: string | null;
+  exitText: string | null;
+  /** Null when the port could not be matched to coordinates. */
+  entry: ShipmentPort | null;
+  exit: ShipmentPort | null;
+  /** Straight-line distance between the two ports. */
+  distanceKm: number | null;
+  containers: string | null;
   grossWeightKg: number | null;
-  shipper: string;
-  consignee: string;
+  shipper: string | null;
+  consignee: string | null;
+  notifyParty: string | null;
   result: Result;
-  confidence: number;
+  /** 0-100, null when nothing was scored. */
+  confidence: number | null;
 }

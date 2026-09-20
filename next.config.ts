@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Turbopack mis-bundles one of its dependencies ("Queue is not a constructor"), so let Node load it.
+  serverExternalPackages: ["searoute-js"],
   async redirects() {
     return [
       // Review queue and Gmail inbox were merged into Batches.

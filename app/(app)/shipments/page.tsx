@@ -1,18 +1,19 @@
 import type { Metadata } from "next";
-import { PageHeader, SampleBadge } from "@/components/ui";
-import { shipments } from "@/lib/mock/data";
+import { PageHeader } from "@/components/ui";
+import { getShipments } from "@/lib/shipments";
 import { ShipmentsView } from "./shipments-view";
 
 export const metadata: Metadata = { title: "Shipments · Averis x Monash" };
+export const dynamic = "force-dynamic";
 
-export default function ShipmentsPage() {
+export default async function ShipmentsPage() {
+  const shipments = await getShipments();
   return (
     <>
       <PageHeader
         eyebrow="Shipments"
         title="Shipments"
         description="Each shipment traced from its entry port to its exit port."
-        actions={<SampleBadge />}
       />
       <ShipmentsView shipments={shipments} />
     </>
