@@ -73,5 +73,16 @@ Matching values. The label tells you which field a value belongs to; a defect ca
 - gross_weight_kg: weights are always in kg. Also report each document's weight as a plain number in si_gross_weight_kg and bl_gross_weight_kg (e.g. "72,450.00 KG" -> 72450), copying the digits carefully; those two numbers are compared exactly, so formatting such as thousands separators or "KG" vs "KGS" does not matter.
 - container_count: compare the number of containers only (e.g. "3 x 40HC" and "3 X 40' HIGH CUBE" both mean 3).
 
+## Shipping Instruction extraction
+Fill shipping_instruction with the same 7 fields copied from the Shipping Instruction, so the SI's own values are recorded alongside the comparison.
+
+Omit shipping_instruction entirely unless BL_COMPARISON is the highest-confidence category. This holds even when an SI is attached: an SI_REQUEST email carries a perfectly good SI and still extracts nothing.
+
+Within a BL comparison, omit it entirely when there is no SI to read: nothing attached, the SI's role filled by some other document, or the SI unreadable (no text layer, corrupt, encrypted, garbled). When the SI is readable, fill in the object, using null for any of the 7 fields it has no value for ("N/A", a blank, an empty rule "_______", or a label with nothing after it). Never guess a value and never borrow the draft BL's.
+
+Read only the Shipping Instruction. Not the draft BL, not the email body, not a covering note. Identify it by content, as above.
+
+Copy each value as printed on the document, trimmed to a single line. Do not normalise it: no case folding, no punctuation stripping, no expanding or adding location codes, no unit conversion. "72,450.00 KG" stays "72,450.00 KG" and "3 x 40HC" stays "3 x 40HC". The alias table above says which printed label belongs to which field; it does not license rewriting the value. These strings are recorded as-is and are not what the comparison runs on: defect_fields, si_gross_weight_kg and bl_gross_weight_kg are unaffected by what goes here.
+
 ## Reasoning
 Fill in reasoning first. Keep it concise: explain why the category was chosen and how the status was reached, naming the fields that drove the outcome. For a BL comparison, state the SI value and the BL value of each of the 7 fields before deciding.`;

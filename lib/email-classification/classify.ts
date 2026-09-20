@@ -3,12 +3,14 @@ import { OpenRouter } from "@openrouter/sdk";
 import { openRouterConfig } from "@/config/server-env";
 import { SYSTEM_PROMPT, TOOL_DESCRIPTION, TOOL_NAME } from "./prompt";
 import {
+  COMPARED_FIELDS,
   classificationJsonSchema,
   classificationSchema,
   findActiveBl,
   type Classification,
   type ClassificationResponse,
   type ClassifierInput,
+  type ShippingInstructionValues,
 } from "./schemas";
 
 // Retries when the model returns a missing or invalid tool call.
@@ -124,6 +126,24 @@ function stripNulls(value: unknown): unknown {
   return value;
 }
 
+function toShippingInstruction(
+  isBlComparison: boolean,
+  si: Classification["shipping_instruction"],
+): ShippingInstructionValues | null {
+  if (!isBlComparison || !si) return null;
+  return Object.fromEntries(
+    // `stripNulls` has already turned every null the model sent into an absent
+    // key, so read each field back through a default rather than trusting it
+    // to be present.
+    COMPARED_FIELDS.map((field) => [field, blankToNull(si[field])]),
+  ) as ShippingInstructionValues;
+}
+
+// A label the model echoed with nothing after it shouldn't reach the DB as "".
+function blankToNull(value: string | null | undefined): string | null {
+  return value?.trim() || null;
+}
+
 function toResponse(emailId: string, classification: Classification): ClassificationResponse {
   const categories = classification.categories
     .filter((c) => c.confidence_score > 0)
@@ -138,9 +158,21 @@ function toResponse(emailId: string, classification: Classification): Classifica
     review_reason: null,
     defect_fields: [],
     has_defect: false,
+    shipping_instruction: null,
   };
 
   const bl = findActiveBl(classification.categories);
+
+  // The 7 SI values exist only for a BL comparison, the same way the four
+  // comparison fields above carry their defaults otherwise (rules.md invariant
+  // 7). A model that fills them in on a GENERAL or SI_REQUEST email is
+  // corrected here rather than in the schema: a parse issue would burn one of
+  // the three attempts and can fail the email outright.
+  response.shipping_instruction = toShippingInstruction(
+    Boolean(bl),
+    classification.shipping_instruction,
+  );
+
   if (bl?.status === "MISMATCH" || bl?.status === "OK") {
     const defects = new Set(bl.defect_fields ?? []);
 

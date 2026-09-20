@@ -5,6 +5,7 @@ import { parseMessage } from "@/lib/google/gmail";
 import { toClassifierAttachment } from "./extract-text";
 import { attachmentPath, uploadAttachment } from "./attachment-storage";
 import { processEmail } from "./index";
+import { shippingInstructionRow } from "./shipping-instruction";
 
 type SyncedEmail = {
   id: string;
@@ -75,15 +76,36 @@ export async function processSyncedEmail(
     body: email.body ?? "",
     attachments: attachmentBuffers.map((attachment) => ({ filename: attachment.filename, data: attachment.data })),
   });
-  const { error } = await supabase.from("processed_emails").insert({
-    email_id: email.id,
-    synced_email_id: email.id,
-    reasoning: result.reasoning,
-    status: result.status,
-    review_reason: result.review_reason,
-    has_defect: result.has_defect,
-    defect_fields: result.defect_fields,
-    categories: result.categories,
-  });
+  // `.select("id").single()` so the shipping_instructions FK below has a target.
+  const { data: processed, error } = await supabase
+    .from("processed_emails")
+    .insert({
+      email_id: email.id,
+      synced_email_id: email.id,
+      reasoning: result.reasoning,
+      status: result.status,
+      review_reason: result.review_reason,
+      has_defect: result.has_defect,
+      defect_fields: result.defect_fields,
+      categories: result.categories,
+    })
+    .select("id")
+    .single();
   if (error) throw new Error(`Saving analysis: ${error.message}`);
+
+  // Upsert, not insert, so re-running a failed job doesn't duplicate the row.
+  // A failure here throws like the two writes above: process-queue marks the
+  // job failed. Its own FAILED row then conflicts with the analysis row
+  // already written and no-ops, so the queue — not processed_emails.status —
+  // is what records that this job didn't finish.
+  const siRow = shippingInstructionRow(result);
+  if (siRow) {
+    const { error: siError } = await supabase
+      .from("shipping_instructions")
+      .upsert(
+        { processed_email_id: processed.id, ...siRow },
+        { onConflict: "processed_email_id" },
+      );
+    if (siError) throw new Error(`Saving shipping instruction: ${siError.message}`);
+  }
 }

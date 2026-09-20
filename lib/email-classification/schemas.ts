@@ -112,6 +112,28 @@ const categoryResultSchema = z.object({
 
 export type CategoryResult = z.infer<typeof categoryResultSchema>;
 
+// The 7 fields transcribed from the SI attachment. `.optional()` on the object
+// (not `.nullish()`): a nullish object makes `z.toJSONSchema` emit an
+// `anyOf: [object, null]` union, and the request sends
+// `provider: { requireParameters: true }`, so a union can narrow the pool of
+// providers OpenRouter will route to. `.optional()` emits a plain object, and
+// the fields' `.nullish()` renders as `type: ["string", "null"]` — the same
+// shape `si_gross_weight_kg` already uses.
+const shippingInstructionSchema = z
+  .object({
+    shipper: z.string().nullish(),
+    consignee: z.string().nullish(),
+    notify_party: z.string().nullish(),
+    port_of_loading: z.string().nullish(),
+    port_of_discharge: z.string().nullish(),
+    container_count: z.string().nullish(),
+    gross_weight_kg: z.string().nullish(),
+  })
+  .optional()
+  .describe(
+    "BL_COMPARISON only. The 7 fields copied from the Shipping Instruction attachment. Omit entirely when BL_COMPARISON is not the highest-confidence category, or when no SI was attached.",
+  );
+
 // Field order matters: `reasoning` comes first so the model reasons before it answers.
 const classificationShape = z.object({
   reasoning: z
@@ -124,6 +146,9 @@ const classificationShape = z.object({
     .describe(
       "Each category at most once. Include plausible near-misses with honest scores; leave out categories with no connection to the email.",
     ),
+  // After `categories`: the model must settle the category before it knows
+  // whether to extract at all.
+  shipping_instruction: shippingInstructionSchema,
 });
 
 // The BL comparison result only counts when BL_COMPARISON has the highest
@@ -166,6 +191,10 @@ delete classificationJsonSchema.$schema;
 
 // ---- API response ----
 
+export type ShippingInstructionValues = {
+  [K in (typeof COMPARED_FIELDS)[number]]: string | null;
+};
+
 export type ClassificationResponse = {
   email_id: string;
   reasoning: string;
@@ -174,4 +203,7 @@ export type ClassificationResponse = {
   review_reason: (typeof REVIEW_REASONS)[number] | null;
   defect_fields: (typeof COMPARED_FIELDS)[number][];
   has_defect: boolean;
+  // Non-null only when BL_COMPARISON is the top-scoring category and an SI was
+  // attached. A field is null when the SI had no value for it.
+  shipping_instruction: ShippingInstructionValues | null;
 };

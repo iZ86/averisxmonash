@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { classifyEmail } from "@/lib/email-classification/classify";
 import { errorMessage } from "@/lib/errors";
+import { shippingInstructionRow } from "@/lib/email-processing/shipping-instruction";
 
 export const runtime = "nodejs";
 
@@ -55,7 +56,10 @@ export async function POST(request: Request) {
       })),
     });
 
-    const { error } = await supabase.from("processed_emails").upsert(
+    // ON CONFLICT DO UPDATE keeps the existing row's `id` (it isn't in the
+    // payload), so any shipping_instructions row already pointing at it stays
+    // valid and is overwritten below rather than orphaned.
+    const { data: processed, error } = await supabase.from("processed_emails").upsert(
       {
         email_id: email.id,
         synced_email_id: email.id,
@@ -68,8 +72,28 @@ export async function POST(request: Request) {
         created_at: new Date().toISOString(),
       },
       { onConflict: "email_id" },
-    );
+    )
+      .select("id")
+      .single();
     if (error) throw error;
+
+    // Unlike the sync path, a retry can also need to *clear* the row: a
+    // re-classification that turns MISMATCH into OK-with-no-SI would otherwise
+    // leave the old values behind. `on delete cascade` doesn't help — the
+    // parent is upserted, not deleted.
+    const siRow = shippingInstructionRow(result);
+    const { error: siError } = siRow
+      ? await supabase
+          .from("shipping_instructions")
+          .upsert(
+            { processed_email_id: processed.id, ...siRow },
+            { onConflict: "processed_email_id" },
+          )
+      : await supabase
+          .from("shipping_instructions")
+          .delete()
+          .eq("processed_email_id", processed.id);
+    if (siError) throw siError;
 
     return NextResponse.json({ success: true });
   } catch (error) {
