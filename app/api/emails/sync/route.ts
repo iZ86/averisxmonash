@@ -114,6 +114,25 @@ export async function POST() {
         { onConflict: "email_id", ignoreDuplicates: true },
       );
       if (queueError) throw queueError;
+
+      // Once an email is captured here, it no longer needs to show as unread
+      // in Gmail. Best-effort per row: a failed mark-as-read (e.g. the refresh
+      // token only has readonly scope) never fails the sync — the row just
+      // keeps whatever is_unread it was inserted with.
+      await mapWithConcurrency(inserted, GMAIL_FETCH_CONCURRENCY, async (row) => {
+        try {
+          await fetchWithBackoff(() =>
+            gmail.users.messages.modify({
+              userId: "me",
+              id: row.gmail_message_id,
+              requestBody: { removeLabelIds: ["UNREAD"] },
+            }),
+          );
+          await supabase.from("emails").update({ is_unread: false }).eq("id", row.id);
+        } catch (error) {
+          console.error("mark-as-read failed", row.gmail_message_id, error);
+        }
+      });
     }
 
     // Existing messages: only is_unread may have changed since we last saw them.
