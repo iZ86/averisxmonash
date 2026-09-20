@@ -41,24 +41,33 @@ export async function updateSession(request: NextRequest) {
   const { data } = await supabase.auth.getClaims();
   const user = data?.claims;
 
-  if (
-    request.nextUrl.pathname !== "/" &&
-    !user &&
-    !request.nextUrl.pathname.startsWith("/login") &&
-    !request.nextUrl.pathname.startsWith("/auth") &&
-    // Instruments pages are public, no login needed
-    request.nextUrl.pathname !== "/instruments" &&
-    !request.nextUrl.pathname.startsWith("/instruments/") &&
+  const { pathname } = request.nextUrl;
+
+  // Signed-in users skip the landing page.
+  if (user && pathname === "/") {
+    const redirect = NextResponse.redirect(new URL("/dashboard", request.url));
+    supabaseResponse.cookies.getAll().forEach((c) => redirect.cookies.set(c));
+    return redirect;
+  }
+
+  // Everything except the landing page, the auth routes and the public
+  // instruments pages needs a session.
+  const isPublic =
+    pathname === "/" ||
+    pathname === "/auth" ||
+    pathname.startsWith("/auth/") ||
+    pathname === "/instruments" ||
+    pathname.startsWith("/instruments/") ||
     // Email processing API is open while testing
-    request.nextUrl.pathname !== "/api/process-email" &&
-    // Upload pages/API are public, no login needed
-    !request.nextUrl.pathname.startsWith("/upload") &&
-    !request.nextUrl.pathname.startsWith("/api/upload")
-  ) {
-    // no user, potentially respond by redirecting the user to the login page
-    const url = request.nextUrl.clone();
-    url.pathname = "/auth/login";
-    return NextResponse.redirect(url);
+    pathname === "/api/process-email";
+
+  if (!user && !isPublic) {
+    const redirect = pathname.startsWith("/api/")
+      ? NextResponse.json({ success: false, error: "Sign in required." }, { status: 401 })
+      : NextResponse.redirect(new URL("/", request.url));
+    // Keep any cookies Supabase just refreshed.
+    supabaseResponse.cookies.getAll().forEach((c) => redirect.cookies.set(c));
+    return redirect;
   }
 
   // IMPORTANT: You *must* return the supabaseResponse object as it is.
