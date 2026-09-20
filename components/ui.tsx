@@ -99,7 +99,7 @@ export function ResultBadge({ result }: { result: Result }) {
 }
 
 export function CategoryChip({ category }: { category: Category }) {
-  return <span className="chip">{CATEGORY_LABEL[category]}</span>;
+  return <span className={`chip ${category}`}>{CATEGORY_LABEL[category]}</span>;
 }
 
 /** Marks screens that still render mock data. */

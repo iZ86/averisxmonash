@@ -36,6 +36,12 @@
   --confidence-high: #0b6b62;
   --confidence-mid: #f7811f;
   --confidence-low: #b3261e;
+  /* Category chip colors beyond the core semantic set — Tailwind's blue/violet
+     scales, since no existing token fits "new SI request" / "invoice query". */
+  --category-si: #1d4ed8;
+  --category-si-soft: rgba(37, 99, 235, 0.12);
+  --category-invoice: #6d28d9;
+  --category-invoice-soft: rgba(124, 58, 237, 0.12);
 }
 
 /* Follow the OS preference unless the page sets data-theme explicitly. */
@@ -72,6 +78,10 @@
     --confidence-high: #63d6c4;
     --confidence-mid: #ff9d55;
     --confidence-low: #ff8f86;
+    --category-si: #60a5fa;
+    --category-si-soft: rgba(96, 165, 250, 0.16);
+    --category-invoice: #a78bfa;
+    --category-invoice-soft: rgba(167, 139, 250, 0.16);
   }
 }
 
@@ -107,6 +117,10 @@
   --confidence-high: #63d6c4;
   --confidence-mid: #ff9d55;
   --confidence-low: #ff8f86;
+  --category-si: #60a5fa;
+  --category-si-soft: rgba(96, 165, 250, 0.16);
+  --category-invoice: #a78bfa;
+  --category-invoice-soft: rgba(167, 139, 250, 0.16);
 }
 
 @theme inline {
@@ -331,6 +345,30 @@ body {
     font-size: 12px;
     font-weight: 500;
     white-space: nowrap;
+  }
+  /* Category chip colors: distinct per category, and deliberately never
+     var(--surface-inset) — that's also the selected-row background, so a
+     plain neutral chip visually disappears once its row is selected. */
+  .chip.document_comparison {
+    background: var(--accent-soft);
+    color: var(--accent-text);
+  }
+  .chip.new_si_request {
+    background: var(--category-si-soft);
+    color: var(--category-si);
+  }
+  .chip.invoice_query {
+    background: var(--category-invoice-soft);
+    color: var(--category-invoice);
+  }
+  .chip.general {
+    background: var(--surface-card);
+    color: var(--text-label);
+    border: 1px solid var(--border);
+  }
+  .chip.spam {
+    background: var(--status-mismatch-soft);
+    color: var(--status-mismatch);
   }
   .code {
     font-family: var(--font-geist-mono), ui-monospace, monospace;
