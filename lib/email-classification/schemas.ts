@@ -154,6 +154,9 @@ const classificationShape = z.object({
   bill_of_lading: documentValuesSchema(
     "BL_COMPARISON only. The 7 fields copied from the draft Bill of Lading attachment. Omit entirely when BL_COMPARISON is not the highest-confidence category, or when no readable draft BL was attached.",
   ),
+  shipping_instruction_request: documentValuesSchema(
+    "SI_REQUEST only. The 7 fields copied from the shipping instruction the email supplies, whether it is attached or written out in the email body. Omit entirely when SI_REQUEST is not the highest-confidence category, or when the email supplies no shipping instruction to read.",
+  ),
 });
 
 // The BL comparison result only counts when BL_COMPARISON has the highest
@@ -164,6 +167,21 @@ export function findActiveBl(categories: CategoryResult[]): CategoryResult | und
   if (!bl) return undefined;
   const top = Math.max(...relevant.map((c) => c.confidence_score));
   return bl.confidence_score >= top ? bl : undefined;
+}
+
+// The SI a request email supplies is only extracted when SI_REQUEST is the top
+// category. Ties go to BL_COMPARISON (findActiveBl above), so this asks for a
+// strict lead instead of `>=` — otherwise an email scored 0.9/0.9 would be both
+// an active BL comparison and an active SI request.
+export function findActiveSiRequest(categories: CategoryResult[]): CategoryResult | undefined {
+  const relevant = categories.filter((c) => c.confidence_score > 0);
+  const si = relevant.find((c) => c.category === "SI_REQUEST");
+  if (!si) return undefined;
+  const topOther = Math.max(
+    0,
+    ...relevant.filter((c) => c.category !== "SI_REQUEST").map((c) => c.confidence_score),
+  );
+  return si.confidence_score > topOther ? si : undefined;
 }
 
 export const classificationSchema = classificationShape.superRefine((value, ctx) => {
@@ -214,4 +232,7 @@ export type ClassificationResponse = {
   // no value for it.
   shipping_instruction: ExtractedDocumentValues | null;
   bill_of_lading: ExtractedDocumentValues | null;
+  // Non-null only when SI_REQUEST is the top-scoring category and the email
+  // supplied a shipping instruction, in an attachment or in its body.
+  shipping_instruction_request: ExtractedDocumentValues | null;
 };

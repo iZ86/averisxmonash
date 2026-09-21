@@ -4,10 +4,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { parseMessage } from "@/lib/google/gmail";
 import { toClassifierAttachment } from "./extract-text";
 import { attachmentPath, uploadAttachment } from "./attachment-storage";
-import { extractSiValues, isSiRequest } from "@/lib/instruction-requests/extract";
-import { saveRequestDetails } from "@/lib/instruction-requests/save";
 import { processEmail } from "./index";
-import { billOfLadingRow, shippingInstructionRow } from "./extracted-documents";
+import {
+  billOfLadingRow,
+  shippingInstructionRequestRow,
+  shippingInstructionRow,
+} from "./extracted-documents";
 
 type SyncedEmail = {
   id: string;
@@ -96,7 +98,7 @@ export async function processSyncedEmail(
   if (error) throw new Error(`Saving analysis: ${error.message}`);
 
   // Upsert, not insert, so re-running a failed job doesn't duplicate the rows.
-  // A failure here throws like the two writes above: process-queue marks the
+  // A failure in any of the three throws like the writes above: process-queue marks the
   // job failed. Its own FAILED row then conflicts with the analysis row
   // already written and no-ops, so the queue — not processed_emails.status —
   // is what records that this job didn't finish.
@@ -122,20 +124,16 @@ export async function processSyncedEmail(
     if (blError) throw new Error(`Saving bill of lading: ${blError.message}`);
   }
 
-  // An SI request gets its SI values read in a second, focused call, so the Instructions Requests page
-  // can show them and generate the BL. Best effort: a failure here must not fail the email itself.
-  if (isSiRequest(result.categories)) {
-    try {
-      const values = await extractSiValues({
-        from: email.from_address,
-        subject: email.subject,
-        body: email.body ?? "",
-        attachments: extracted.map((a) => ({ attachment_name: a.attachment_name, attachment_content: a.attachment_content })),
-      });
-      const requestError = await saveRequestDetails(supabase, processed.id, values);
-      if (requestError) console.error(`Saving instruction request details: ${requestError.message}`);
-    } catch (error) {
-      console.error("Reading the SI for an instruction request failed:", error);
+  const siRequestRow = shippingInstructionRequestRow(result);
+  if (siRequestRow) {
+    const { error: siRequestError } = await supabase
+      .from("shipping_instructions_request_details")
+      .upsert(
+        { processed_email_id: processed.id, ...siRequestRow },
+        { onConflict: "processed_email_id" },
+      );
+    if (siRequestError) {
+      throw new Error(`Saving shipping instruction request: ${siRequestError.message}`);
     }
   }
 }

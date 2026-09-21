@@ -4,7 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 import { classifyEmail } from "@/lib/email-classification/classify";
 import type { ExtractedDocumentValues } from "@/lib/email-classification/schemas";
 import { errorMessage } from "@/lib/errors";
-import { billOfLadingRow, shippingInstructionRow } from "@/lib/email-processing/extracted-documents";
+import {
+  billOfLadingRow,
+  shippingInstructionRequestRow,
+  shippingInstructionRow,
+} from "@/lib/email-processing/extracted-documents";
 
 export const runtime = "nodejs";
 
@@ -98,6 +102,16 @@ export async function POST(request: Request) {
     );
     if (blError) throw blError;
 
+    // Cleared the same way: an email re-classified out of SI_REQUEST shouldn't
+    // keep the instructions extracted under the old category.
+    const siRequestError = await writeDocumentRow(
+      supabase,
+      "shipping_instructions_request_details",
+      processed.id,
+      shippingInstructionRequestRow(result),
+    );
+    if (siRequestError) throw siRequestError;
+
     return NextResponse.json({ success: true });
   } catch (error) {
     const message = errorMessage(error);
@@ -122,7 +136,7 @@ export async function POST(request: Request) {
 /** Upserts the extracted row, or clears it when this classification wants none. */
 async function writeDocumentRow(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  table: "shipping_instructions" | "bill_of_lading",
+  table: "shipping_instructions" | "bill_of_lading" | "shipping_instructions_request_details",
   processedEmailId: string,
   row: ExtractedDocumentValues | null,
 ) {

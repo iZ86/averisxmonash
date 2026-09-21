@@ -2,6 +2,7 @@ import "server-only";
 import {
   COMPARED_FIELDS,
   findActiveBl,
+  findActiveSiRequest,
   type ClassificationResponse,
   type ExtractedDocumentValues,
 } from "@/lib/email-classification/schemas";
@@ -50,4 +51,19 @@ export function shippingInstructionRow(result: ClassificationResponse) {
 
 export function billOfLadingRow(result: ClassificationResponse) {
   return documentRow(result, result.bill_of_lading);
+}
+
+/**
+ * The row to write for the instructions an SI_REQUEST email supplied, or null
+ * to write none.
+ *
+ * `documentRow`'s status branches don't apply here: `status` is "OK" on every
+ * non-BL email (rules.md invariant 6), so there is no MISMATCH or NEEDS_REVIEW
+ * to record and nothing to store an all-null row for. An SI request with
+ * nothing readable in it is simply not an extraction.
+ */
+export function shippingInstructionRequestRow(result: ClassificationResponse) {
+  if (!findActiveSiRequest(result.categories)) return null;
+  const values = result.shipping_instruction_request;
+  return values && hasAnyValue(values) ? values : null;
 }
