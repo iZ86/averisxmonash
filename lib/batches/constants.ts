@@ -4,3 +4,9 @@
  * ("server-only") and lib/batches/queries.ts ("client-only") can't import
  * from each other. */
 export const SYNC_LOCK_STALE_MS = 5 * 60 * 1000;
+
+/** Our own mailbox (lowercase). Its messages are stored for threading but never classified,
+ * and the UI shows them as sent by us. */
+export const IGNORED_SENDER = "chickenriceclaypot0@gmail.com";
+
+export const isOwnAddress = (address: string) => address.toLowerCase() === IGNORED_SENDER;

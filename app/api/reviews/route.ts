@@ -13,7 +13,7 @@ const uuid = z.string().uuid();
 const fieldValues = z.object(Object.fromEntries(REVIEW_FIELDS.map((f) => [f, z.string().trim().min(1, "Required")])) as Record<(typeof REVIEW_FIELDS)[number], z.ZodString>);
 
 const body = z.discriminatedUnion("decision", [
-  z.object({ processedEmailId: uuid, decision: z.literal("accepted"), fieldValues }),
+  z.object({ processedEmailId: uuid, decision: z.literal("accepted"), fieldValues, blFieldValues: fieldValues.optional() }),
   z.object({
     processedEmailId: uuid,
     decision: z.literal("rejected"),
@@ -121,6 +121,18 @@ export async function POST(request: Request) {
   if (error) {
     const note = sentTo ? ` The reply to ${sentTo} was sent, but the decision could not be saved.` : "";
     return NextResponse.json({ success: false, error: `${errorMessage(error)}${note}` }, { status: 500 });
+  }
+  // The reviewer may also have corrected the draft BL's values; store them beside the SI's.
+  if (input.decision === "accepted" && input.blFieldValues) {
+    const { error: blError } = await supabase
+      .from("bill_of_lading")
+      .upsert({ processed_email_id: input.processedEmailId, ...input.blFieldValues }, { onConflict: "processed_email_id" });
+    if (blError) {
+      return NextResponse.json(
+        { success: false, error: `The SI details were saved, but the draft BL details could not be: ${errorMessage(blError)}` },
+        { status: 500 },
+      );
+    }
   }
   return NextResponse.json({ success: true, sentTo });
 }
