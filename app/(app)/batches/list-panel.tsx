@@ -211,8 +211,11 @@ export function ListPanel({
           });
           if (!threaded) return items;
           return (
-            <div key={threadKey} className="border-t border-border">
-              <div className="relative ml-4.5 border-l-2 border-border">
+            // Full-width like every other row, so the list keeps one rhythm. A short rounded marker on the
+            // left flags the thread; it stops short of the row borders, so neighbouring threads stay apart.
+            <div key={threadKey} className="relative border-t border-border">
+              <span aria-hidden className="pointer-events-none absolute top-3 bottom-3 left-2 z-10 w-[3px] rounded-full bg-border-control" />
+              <div className="relative">
                 {open ? items : items[0]}
                 {/* Sits in the first email's top-right corner, beside the subject; a sibling of the row button (a button cannot contain a button). */}
                 <button
