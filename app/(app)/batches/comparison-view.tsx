@@ -4,7 +4,7 @@ import { AlertTriangle, CheckCircle2, File } from "lucide-react";
 import { toast } from "sonner";
 import { CategoryChip, Confidence, ResultBadge } from "@/components/ui";
 import { AUTO_ACCEPT_THRESHOLD, confidenceLevel } from "@/lib/confidence";
-import { FIELD_LABEL } from "@/lib/mock/data";
+import { FIELD_LABEL } from "@/lib/labels";
 import type { BatchEmail } from "@/lib/batches/types";
 
 // Moved from app/(app)/emails/[emailId]/page.tsx's Report()/Verdict(), adapted

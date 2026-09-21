@@ -1,5 +1,5 @@
 import { AlertTriangle, CheckCircle2, Flag, XCircle } from "lucide-react";
-import { CATEGORY_LABEL, RESULT_LABEL } from "@/lib/mock/data";
+import { CATEGORY_LABEL, RESULT_LABEL } from "@/lib/labels";
 import {
   LEVEL_LABEL,
   LEVEL_METER,
@@ -102,10 +102,6 @@ export function CategoryChip({ category }: { category: Category }) {
   return <span className={`chip ${category}`}>{CATEGORY_LABEL[category]}</span>;
 }
 
-/** Marks screens that still render mock data. */
-export function SampleBadge() {
-  return <span className="badge neutral">Sample data</span>;
-}
 
 type PageHeaderProps = {
   eyebrow: string;
