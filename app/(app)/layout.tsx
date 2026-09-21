@@ -1,4 +1,5 @@
 import { SidebarShell } from "@/components/sidebar-shell";
+import { getInstructionStats } from "@/lib/instruction-requests/stats";
 import { createClient } from "@/lib/supabase/server";
 
 /** Shared shell for every signed-in route: collapsible navy sidebar plus a main column. */
@@ -15,10 +16,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       .select("id", { count: "exact", head: true })
       .eq("status", status)
       .or("email_sent.is.null,email_sent.eq.false");
-  const [{ count }, { count: mismatchCount }] = await Promise.all([openCases("NEEDS_REVIEW"), openCases("MISMATCH")]);
+  const [{ count }, { count: mismatchCount }, instructions] = await Promise.all([
+    openCases("NEEDS_REVIEW"),
+    openCases("MISMATCH"),
+    getInstructionStats(supabase).catch(() => ({ total: 0, notified: 0 })),
+  ]);
 
   return (
-    <SidebarShell reviewCount={count ?? 0} mismatchCount={mismatchCount ?? 0} userName={String(name)}>
+    <SidebarShell reviewCount={count ?? 0} mismatchCount={mismatchCount ?? 0} instructionCount={Math.max(0, instructions.total - instructions.notified)} userName={String(name)}>
       {children}
     </SidebarShell>
   );

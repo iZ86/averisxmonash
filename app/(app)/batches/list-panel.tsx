@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, Clock3, Flag, Mail, MessagesSquare, Send } from "lucide-react";
+import { AlertTriangle, ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, Clock3, FileText, Flag, Mail, MessagesSquare, Send } from "lucide-react";
 import { CategoryChip, ResultBadge } from "@/components/ui";
 import { fmtShort } from "@/lib/batches/format";
 import { isOwnAddress } from "@/lib/batches/constants";
@@ -42,7 +42,7 @@ export function ListPanel({
   onPageChange: (page: number) => void;
   noun?: { one: string; many: string };
   /** "review" is the Review Queue: rows show the review reason instead of the category and result. */
-  variant?: "all" | "review" | "mismatch";
+  variant?: "all" | "review" | "mismatch" | "instruction";
   /** Which rows have already had a reply emailed to their sender (shown as an "Email sent" badge). */
   sentIds?: Set<string>;
   /** Mismatches only: checkboxes for bulk emailing, and which rows have already been emailed. */
@@ -106,7 +106,8 @@ export function ListPanel({
           // Context rows (outside the filter) always show their own category/result, whatever the page.
           const isReviewRow = variant === "review" && inFilter;
           const isMismatchRow = variant === "mismatch" && inFilter;
-          const hint = isReviewRow || isMismatchRow ? null : reviewHint(e);
+          const isInstructionRow = variant === "instruction" && inFilter;
+          const hint = isReviewRow || isMismatchRow || isInstructionRow ? null : reviewHint(e);
           const isSent = !!e.processedId && !!(sentIds ?? selection?.sent)?.has(e.processedId);
           const row = (
             <button
@@ -161,7 +162,20 @@ export function ListPanel({
               </span>
               {/* Our own outgoing replies are not classified for the reader: no badges, just the message. */}
               <span className={`${ours ? "hidden" : "flex"} flex-wrap items-center gap-1.5 pl-3.5 ${reply ? "pt-0.5" : "pt-1"} text-xs [&_.badge]:gap-1 [&_.badge]:px-2 [&_.badge]:whitespace-nowrap [&_.chip]:gap-1 [&_.chip]:px-2 [&_.chip]:whitespace-nowrap`}>
-                {isMismatchRow ? (
+                {isInstructionRow ? (
+                  <>
+                    <span className="badge info">
+                      <FileText size={14} strokeWidth={1.75} aria-hidden />
+                      Instruction request
+                    </span>
+                    {isSent && (
+                      <span className="badge ok">
+                        <Mail size={14} strokeWidth={1.75} aria-hidden />
+                        Bill of Lading sent
+                      </span>
+                    )}
+                  </>
+                ) : isMismatchRow ? (
                   <>
                     {e.defectFields.map((f) => (
                       <span className="badge bad" key={f}>
@@ -199,7 +213,7 @@ export function ListPanel({
                 ) : (
                   <span className="text-text-muted">n/a</span>
                 )}
-                {!isReviewRow && !isMismatchRow && e.result !== "pending" && <ResultBadge result={e.result} />}
+                {!isReviewRow && !isMismatchRow && !isInstructionRow && e.result !== "pending" && <ResultBadge result={e.result} />}
               </span>
             </button>
           );

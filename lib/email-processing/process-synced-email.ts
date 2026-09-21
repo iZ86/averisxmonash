@@ -4,6 +4,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { parseMessage } from "@/lib/google/gmail";
 import { toClassifierAttachment } from "./extract-text";
 import { attachmentPath, uploadAttachment } from "./attachment-storage";
+import { extractSiValues, isSiRequest } from "@/lib/instruction-requests/extract";
+import { saveRequestDetails } from "@/lib/instruction-requests/save";
 import { processEmail } from "./index";
 import { billOfLadingRow, shippingInstructionRow } from "./extracted-documents";
 
@@ -118,5 +120,22 @@ export async function processSyncedEmail(
         { onConflict: "processed_email_id" },
       );
     if (blError) throw new Error(`Saving bill of lading: ${blError.message}`);
+  }
+
+  // An SI request gets its SI values read in a second, focused call, so the Instructions Requests page
+  // can show them and generate the BL. Best effort: a failure here must not fail the email itself.
+  if (isSiRequest(result.categories)) {
+    try {
+      const values = await extractSiValues({
+        from: email.from_address,
+        subject: email.subject,
+        body: email.body ?? "",
+        attachments: extracted.map((a) => ({ attachment_name: a.attachment_name, attachment_content: a.attachment_content })),
+      });
+      const requestError = await saveRequestDetails(supabase, processed.id, values);
+      if (requestError) console.error(`Saving instruction request details: ${requestError.message}`);
+    } catch (error) {
+      console.error("Reading the SI for an instruction request failed:", error);
+    }
   }
 }

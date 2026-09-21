@@ -11,12 +11,13 @@ export const PAGE_SIZE = 8;
 /** Review queue / Mismatches filter: cases whose sender has been emailed, or that are still waiting. */
 export type SentFilter = "pending" | "emailed";
 
-export type Tab = "all" | "comparison" | "review" | "low" | "failed" | "mismatch";
+export type Tab = "all" | "comparison" | "si_request" | "review" | "low" | "failed" | "mismatch";
 export type Sort = "newest" | "lowest" | "oldest";
 
 export const TABS: { key: Tab; label: string; }[] = [
   { key: "all", label: "All" },
   { key: "comparison", label: "Comparison" },
+  { key: "si_request", label: "SI request" },
   { key: "review", label: "Needs review" },
   { key: "low", label: "Low confidence" },
   { key: "failed", label: "Failed" },
@@ -94,6 +95,7 @@ export async function listBatchEmails(
     );
 
   if (opts.tab === "comparison") query = query.eq("category", "document_comparison");
+  else if (opts.tab === "si_request") query = query.eq("category", "new_si_request");
   else if (opts.tab === "review") {
     query = query.eq("result", "needs_review");
     if (opts.reason) query = query.eq("review_reason", opts.reason);
@@ -108,12 +110,12 @@ export async function listBatchEmails(
 
   // Emailed vs pending lives on processed_emails.email_sent, which the view doesn't expose,
   // so look up the emailed ids first and filter the list by them.
-  if (opts.sent && (opts.tab === "review" || opts.tab === "mismatch")) {
+  if (opts.sent && (opts.tab === "review" || opts.tab === "mismatch" || opts.tab === "si_request")) {
     const { data: sentRows, error: sentError } = await supabase
       .from("processed_emails")
       .select("id")
       .eq("email_sent", true)
-      .eq("status", opts.tab === "review" ? "NEEDS_REVIEW" : "MISMATCH");
+      .eq("status", opts.tab === "review" ? "NEEDS_REVIEW" : opts.tab === "mismatch" ? "MISMATCH" : "OK");
     if (sentError) throw sentError;
     const sentIds = (sentRows ?? []).map((r: { id: string }) => r.id);
     if (opts.sent === "emailed") {
@@ -203,11 +205,16 @@ export type BatchStats = {
   needsReview: number;
   failed: number;
   comparison: number;
+  siRequest: number;
 };
 
 export async function getBatchStats(supabase: SupabaseClient): Promise<BatchStats> {
-  const { data, error } = await supabase.rpc("batch_email_stats").single();
+  const [{ data, error }, { count: siRequest, error: siError }] = await Promise.all([
+    supabase.rpc("batch_email_stats").single(),
+    supabase.from("batch_emails").select("id", { count: "exact", head: true }).eq("category", "new_si_request"),
+  ]);
   if (error) throw error;
+  if (siError) throw siError;
   const row = data as {
     total: number;
     avg_confidence: number | null;
@@ -223,6 +230,7 @@ export async function getBatchStats(supabase: SupabaseClient): Promise<BatchStat
     needsReview: row.needs_review,
     failed: row.failed,
     comparison: row.comparison,
+    siRequest: siRequest ?? 0,
   };
 }
 

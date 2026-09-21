@@ -44,6 +44,8 @@ import { DetailHeader, type DetailTab } from "./detail-header";
 import { ComparisonView } from "./comparison-view";
 import { AttachmentsView } from "./attachments-view";
 import { ReviewView } from "./review-view";
+import { SiRequestView } from "./si-request-view";
+import { getInstructionStats, type InstructionStats } from "@/lib/instruction-requests/stats";
 import { PendingView, NotComparedView, FailedView, EmailView } from "./other-views";
 
 const isTab = (v: string | null): v is Tab => !!v && TABS.some((t) => t.key === v);
@@ -57,7 +59,7 @@ const REASON_ORDER: ReviewReasonCode[] = ["wrong_doc_type", "missing_attachment"
  * "mismatch" is the Mismatches page: MISMATCH emails filtered by which of the 7 fields differ, with
  * checkboxes and buttons to email the senders.
  */
-export type WorkspaceMode = "all" | "review" | "mismatch";
+export type WorkspaceMode = "all" | "review" | "mismatch" | "instruction";
 
 const isField = (v: string | null): v is ReviewField => !!v && (REVIEW_FIELDS as readonly string[]).includes(v);
 
@@ -69,6 +71,7 @@ function defaultDetailTab(email: BatchEmail): DetailTab {
 export function BatchesWorkspace({ mode = "all" }: { mode?: WorkspaceMode }) {
   const isReview = mode === "review";
   const isMismatch = mode === "mismatch";
+  const isInstruction = mode === "instruction";
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -78,7 +81,9 @@ export function BatchesWorkspace({ mode = "all" }: { mode?: WorkspaceMode }) {
     ? "review"
     : isMismatch
       ? "mismatch"
-      : isTab(params.get("tab"))
+      : isInstruction
+        ? "si_request"
+        : isTab(params.get("tab"))
         ? (params.get("tab") as Tab)
         : "all";
   const reasonParam = params.get("reason");
@@ -87,9 +92,9 @@ export function BatchesWorkspace({ mode = "all" }: { mode?: WorkspaceMode }) {
   const field: ReviewField | null = isMismatch && isField(fieldParam) ? fieldParam : null;
   const sentParam = params.get("sent");
   const sentFilter: SentFilter | null =
-    (isReview || isMismatch) && (sentParam === "pending" || sentParam === "emailed") ? sentParam : null;
+    (isReview || isMismatch || isInstruction) && (sentParam === "pending" || sentParam === "emailed") ? sentParam : null;
   const filter = [reason ?? field, sentFilter].filter(Boolean).join("+") || null;
-  const defaultSort: Sort = isReview || isMismatch ? "oldest" : "newest";
+  const defaultSort: Sort = isReview || isMismatch || isInstruction ? "oldest" : "newest";
   const sort: Sort = isSort(params.get("sort")) ? (params.get("sort") as Sort) : defaultSort;
   const page = Math.max(1, Number(params.get("page")) || 1);
   const q = params.get("q") ?? "";
@@ -118,6 +123,7 @@ export function BatchesWorkspace({ mode = "all" }: { mode?: WorkspaceMode }) {
   const [stats, setStats] = useState<BatchStats | null>(null);
   const [reviewStats, setReviewStats] = useState<ReviewStats | null>(null);
   const [mismatchStats, setMismatchStats] = useState<MismatchStats | null>(null);
+  const [instructionStats, setInstructionStats] = useState<InstructionStats | null>(null);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [sentIds, setSentIds] = useState<Set<string>>(new Set());
   const [emailing, setEmailing] = useState(false);
@@ -148,14 +154,21 @@ export function BatchesWorkspace({ mode = "all" }: { mode?: WorkspaceMode }) {
   // Reusable versions for event handlers (sync/retry/resolve) to call after a mutation.
   const refreshStats = useCallback(async () => {
     const [s, synced] = await Promise.all([
-      isReview ? getReviewStats(supabase) : isMismatch ? getMismatchStats(supabase) : getBatchStats(supabase),
+      isReview
+        ? getReviewStats(supabase)
+        : isMismatch
+          ? getMismatchStats(supabase)
+          : isInstruction
+            ? getInstructionStats(supabase)
+            : getBatchStats(supabase),
       getLastSyncedAt(supabase),
     ]);
     if (isReview) setReviewStats(s as ReviewStats);
     else if (isMismatch) setMismatchStats(s as MismatchStats);
+    else if (isInstruction) setInstructionStats(s as InstructionStats);
     else setStats(s as BatchStats);
     setLastSyncedAt(synced);
-  }, [supabase, isReview, isMismatch]);
+  }, [supabase, isReview, isMismatch, isInstruction]);
 
   const refreshList = useCallback(async () => {
     try {
@@ -183,23 +196,30 @@ export function BatchesWorkspace({ mode = "all" }: { mode?: WorkspaceMode }) {
   useEffect(() => {
     let cancelled = false;
     Promise.all([
-      isReview ? getReviewStats(supabase) : isMismatch ? getMismatchStats(supabase) : getBatchStats(supabase),
+      isReview
+        ? getReviewStats(supabase)
+        : isMismatch
+          ? getMismatchStats(supabase)
+          : isInstruction
+            ? getInstructionStats(supabase)
+            : getBatchStats(supabase),
       getLastSyncedAt(supabase),
     ]).then(([s, synced]) => {
       if (cancelled) return;
       if (isReview) setReviewStats(s as ReviewStats);
       else if (isMismatch) setMismatchStats(s as MismatchStats);
+      else if (isInstruction) setInstructionStats(s as InstructionStats);
       else setStats(s as BatchStats);
       setLastSyncedAt(synced);
     });
     return () => {
       cancelled = true;
     };
-  }, [supabase, isReview, isMismatch]);
+  }, [supabase, isReview, isMismatch, isInstruction]);
 
   // Mismatches and the review queue: which of the listed emails have already been emailed to their sender.
   useEffect(() => {
-    if (!isMismatch && !isReview) return;
+    if (!isMismatch && !isReview && !isInstruction) return;
     let cancelled = false;
     getEmailSentIds(
       supabase,
@@ -210,7 +230,7 @@ export function BatchesWorkspace({ mode = "all" }: { mode?: WorkspaceMode }) {
     return () => {
       cancelled = true;
     };
-  }, [supabase, isMismatch, isReview, rows]);
+  }, [supabase, isMismatch, isReview, isInstruction, rows]);
 
   // Detect a sync already in progress (started by this tab before a refresh,
   // or by another tab/session) so the button shows as loading immediately,
@@ -525,6 +545,7 @@ export function BatchesWorkspace({ mode = "all" }: { mode?: WorkspaceMode }) {
   const reasonCount = (r: ReviewReasonCode) => reviewStats?.byReason[r] ?? 0;
   const fieldCount = (f: ReviewField) => mismatchStats?.byField[f] ?? 0;
   const selectedProcessedId = detail?.processedId ?? null;
+  const openStats = isReview ? reviewStats : isMismatch ? mismatchStats : instructionStats;
   const displayedDetail = selectedId ? detail : null;
 
   // Header row, the same on every page: sync, upload (Batches only) and the last-synced note.
@@ -540,7 +561,7 @@ export function BatchesWorkspace({ mode = "all" }: { mode?: WorkspaceMode }) {
           <RefreshCw size={16} strokeWidth={1.75} aria-hidden className={syncing ? "animate-spin" : undefined} />
           {syncing ? "Syncing…" : "Sync emails"}
         </button>
-        {!isReview && !isMismatch && (
+        {!isReview && !isMismatch && !isInstruction && (
           <Link href="/upload" className="btn accent shadow-sm hover:shadow">
             <Upload size={16} strokeWidth={1.75} aria-hidden />
             Upload data
@@ -601,21 +622,34 @@ export function BatchesWorkspace({ mode = "all" }: { mode?: WorkspaceMode }) {
       <div className="flex flex-col gap-4">
         <div>
           <div className="eyebrow">
-            {isReview ? "Human in the loop" : isMismatch ? "Document comparison" : "Batches"}
+            {isReview ? "Human in the loop" : isMismatch ? "Document comparison" : isInstruction ? "Shipping instructions" : "Batches"}
           </div>
-          <h1 className="h1">{isReview ? "Review queue" : isMismatch ? "Mismatches" : "Batches"}</h1>
+          <h1 className="h1">{isReview ? "Review queue" : isMismatch ? "Mismatches" : isInstruction ? "Instructions Requests" : "Batches"}</h1>
           <p className="p">
             {isReview
               ? "Cases the system could not decide on its own. Confirm the details yourself, or reject and ask the sender for a better document."
               : isMismatch
                 ? "Emails where the Shipping Instruction and the draft BL differ. Email the sender so they can send a corrected document."
-                : "Every stored email with its category, confidence and result. Cases the system could not decide are marked Needs review."}
+                : isInstruction
+                  ? "Shipping Instructions sent in by senders. Check the values, then generate the Bill of Lading and reply with it attached."
+                  : "Every stored email with its category, confidence and result. Cases the system could not decide are marked Needs review."}
           </p>
         </div>
         {actionsRow}
       </div>
 
-      {isMismatch ? (
+      {isInstruction ? (
+        <section className="grid grid-cols-2 gap-4 lg:grid-cols-3" aria-label="Instruction request summary">
+          <Kpi label="Instruction requests" value={(instructionStats?.total ?? 0).toLocaleString("en-US")} sub="Shipping Instructions received" />
+          <Kpi
+            label="Waiting for a Bill of Lading"
+            value={Math.max(0, (instructionStats?.total ?? 0) - (instructionStats?.notified ?? 0))}
+            sub="No reply sent yet"
+            tone="orange"
+          />
+          <Kpi label="Bill of Lading sent" value={instructionStats?.notified ?? 0} sub="Sender replied to" tone="teal" />
+        </section>
+      ) : isMismatch ? (
         <section className="grid grid-cols-2 gap-4 lg:grid-cols-3" aria-label="Mismatch summary">
           <Kpi
             label="Mismatches"
@@ -696,6 +730,8 @@ export function BatchesWorkspace({ mode = "all" }: { mode?: WorkspaceMode }) {
             ))}
           </div>
           </div>
+        ) : isInstruction ? (
+          <div />
         ) : isReview ? (
           <div className="seg" role="group" aria-label="Filter by review reason">
             <button
@@ -743,17 +779,13 @@ export function BatchesWorkspace({ mode = "all" }: { mode?: WorkspaceMode }) {
         {searchBox}
       </div>
 
-      {(isReview || isMismatch) && (
+      {(isReview || isMismatch || isInstruction) && (
         <div className="seg w-fit" role="group" aria-label="Filter by email status">
           {(
             [
-              { key: null, label: "All", count: (isReview ? reviewStats?.total : mismatchStats?.total) ?? 0 },
-              {
-                key: "pending",
-                label: "Pending",
-                count: Math.max(0, ((isReview ? reviewStats?.total : mismatchStats?.total) ?? 0) - ((isReview ? reviewStats?.notified : mismatchStats?.notified) ?? 0)),
-              },
-              { key: "emailed", label: "Emailed", count: (isReview ? reviewStats?.notified : mismatchStats?.notified) ?? 0 },
+              { key: null, label: "All", count: openStats?.total ?? 0 },
+              { key: "pending", label: "Pending", count: Math.max(0, (openStats?.total ?? 0) - (openStats?.notified ?? 0)) },
+              { key: "emailed", label: isInstruction ? "Replied" : "Emailed", count: openStats?.notified ?? 0 },
             ] as const
           ).map((o) => (
             <button
@@ -779,16 +811,22 @@ export function BatchesWorkspace({ mode = "all" }: { mode?: WorkspaceMode }) {
           loading={listLoading}
           onSelect={(id) => setParams({ email: id })}
           noun={
-            isReview ? { one: "case", many: "cases" } : isMismatch ? { one: "mismatch", many: "mismatches" } : undefined
+            isReview
+              ? { one: "case", many: "cases" }
+              : isMismatch
+                ? { one: "mismatch", many: "mismatches" }
+                : isInstruction
+                  ? { one: "request", many: "requests" }
+                  : undefined
           }
-          variant={isReview ? "review" : isMismatch ? "mismatch" : "all"}
-          sentIds={isReview ? sentIds : undefined}
+          variant={isReview ? "review" : isMismatch ? "mismatch" : isInstruction ? "instruction" : "all"}
+          sentIds={isReview || isInstruction ? sentIds : undefined}
           selection={
             isMismatch ? { checked, sent: sentIds, onToggle: toggleChecked, onToggleAll: toggleAllChecked } : undefined
           }
           onSortToggle={() =>
             setParams(
-              isReview || isMismatch
+              isReview || isMismatch || isInstruction
                 ? { sort: sort === "oldest" ? "newest" : null, page: null }
                 : { sort: sort === "newest" ? "lowest" : null, page: null },
             )
@@ -800,14 +838,16 @@ export function BatchesWorkspace({ mode = "all" }: { mode?: WorkspaceMode }) {
           {!displayedDetail ? (
             <div className="card flex flex-col items-center gap-1 p-12 text-center">
               <b className="text-text-strong">
-                {isReview ? "Select a case" : isMismatch ? "Select a mismatch" : "Select an email"}
+                {isReview ? "Select a case" : isMismatch ? "Select a mismatch" : isInstruction ? "Select a request" : "Select an email"}
               </b>
               <span className="cap">
                 {isReview
                   ? "The reason and your options show up here."
                   : isMismatch
                     ? "The differing fields and the email to the sender show up here."
-                    : "Its analysis and content show up here."}
+                    : isInstruction
+                      ? "The shipping instruction values and the Bill of Lading you can send back show up here."
+                      : "Its analysis and content show up here."}
               </span>
             </div>
           ) : (
@@ -853,6 +893,8 @@ export function BatchesWorkspace({ mode = "all" }: { mode?: WorkspaceMode }) {
                   onSelect={setAttachmentId}
                   onBackToEmail={() => setDetailTab("email")}
                 />
+              ) : displayedDetail.category === "new_si_request" && displayedDetail.result !== "failed" && displayedDetail.result !== "pending" ? (
+                <SiRequestView key={displayedDetail.id} email={displayedDetail} onSent={onResolved} />
               ) : displayedDetail.result === "needs_review" ? (
                 <ReviewView key={displayedDetail.id} email={displayedDetail} onResolved={onResolved} />
               ) : displayedDetail.result === "mismatch" || displayedDetail.result === "no_mismatch" ? (
@@ -908,6 +950,8 @@ function tabCount(stats: BatchStats | null, key: Tab): number {
       return stats.total;
     case "comparison":
       return stats.comparison;
+    case "si_request":
+      return stats.siRequest;
     case "review":
       return stats.needsReview;
     case "mismatch":
