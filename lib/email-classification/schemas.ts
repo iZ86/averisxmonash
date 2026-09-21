@@ -108,6 +108,16 @@ const categoryResultSchema = z.object({
     .number()
     .nullish()
     .describe("BL_COMPARISON only: the draft BL's gross weight as a plain number in kg."),
+  // Compared in code alongside the numbers above: 500 KG and 500 LB are equal
+  // as numbers but are not the same weight.
+  si_gross_weight_unit: z
+    .string()
+    .nullish()
+    .describe("BL_COMPARISON only: the unit the SI prints its gross weight in, as a short uppercase token (KG, G, MT, LB)."),
+  bl_gross_weight_unit: z
+    .string()
+    .nullish()
+    .describe("BL_COMPARISON only: the unit the draft BL prints its gross weight in, as a short uppercase token (KG, G, MT, LB)."),
 });
 
 export type CategoryResult = z.infer<typeof categoryResultSchema>;

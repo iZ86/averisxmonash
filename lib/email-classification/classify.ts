@@ -145,6 +145,14 @@ function blankToNull(value: string | null | undefined): string | null {
   return value?.trim() || null;
 }
 
+// The prompt asks for a canonical token, but "KGS" for "KG" is the kind of slip
+// that would read as a unit change. Both sides go through this, so the trailing
+// plural is dropped consistently.
+function normalizeWeightUnit(value: string | null | undefined): string | null {
+  const unit = value?.trim().toUpperCase().replace(/S$/, "");
+  return unit || null;
+}
+
 function toResponse(emailId: string, classification: Classification): ClassificationResponse {
   const categories = classification.categories
     .filter((c) => c.confidence_score > 0)
@@ -189,7 +197,13 @@ function toResponse(emailId: string, classification: Classification): Classifica
     // Weights are compared here rather than by the model: 20,603 vs 22,603 and
     // 214,270 vs 214,770 read as equal to a model, but not to ===.
     if (typeof bl.si_gross_weight_kg === "number" && typeof bl.bl_gross_weight_kg === "number") {
-      if (bl.si_gross_weight_kg === bl.bl_gross_weight_kg) defects.delete("gross_weight_kg");
+      // Units only enter the comparison when the model gave both; otherwise fall
+      // back to the numbers alone rather than inventing a difference.
+      const siUnit = normalizeWeightUnit(bl.si_gross_weight_unit);
+      const blUnit = normalizeWeightUnit(bl.bl_gross_weight_unit);
+      const sameUnit = !siUnit || !blUnit || siUnit === blUnit;
+      const sameNumber = bl.si_gross_weight_kg === bl.bl_gross_weight_kg;
+      if (sameNumber && sameUnit) defects.delete("gross_weight_kg");
       else defects.add("gross_weight_kg");
     }
 
