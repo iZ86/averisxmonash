@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Globe, Inbox, LayoutDashboard, Upload } from "lucide-react";
+import { Flag, Globe, Inbox, LayoutDashboard, Upload, AlertTriangle } from "lucide-react";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/batches", label: "Batches", icon: Inbox },
+  { href: "/review", label: "Review queue", icon: Flag },
+  { href: "/mismatches", label: "Mismatches", icon: AlertTriangle },
   { href: "/shipments", label: "Shipments", icon: Globe },
   { href: "/upload", label: "Upload data", icon: Upload },
 ] as const;
@@ -44,18 +46,10 @@ export function SideNav({
             aria-current={on ? "page" : undefined}
             title={collapsed ? label : undefined}
           >
-            <Icon
-              size={18}
-              strokeWidth={1.75}
-              aria-hidden
-              style={{ flex: "none" }}
-            />
+            <Icon size={18} strokeWidth={1.75} aria-hidden style={{ flex: "none" }} />
             <span className={`sidebar-collapsible ${hideLabel}`}>{label}</span>
-            {href === "/batches" && reviewCount > 0 && (
-              <span
-                className={`sidebar-collapsible count ${hideLabel}`}
-                aria-label={`${reviewCount} open cases`}
-              >
+            {href === "/review" && reviewCount > 0 && (
+              <span className={`sidebar-collapsible count ${hideLabel}`} aria-label={`${reviewCount} open cases`}>
                 {reviewCount}
               </span>
             )}

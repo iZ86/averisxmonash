@@ -11,7 +11,7 @@ import { ReclassifyPanel, ReportActions } from "./actions";
 export async function generateMetadata(props: PageProps<"/emails/[emailId]">): Promise<Metadata> {
   const { emailId } = await props.params;
   const email = getEmail(emailId);
-  return { title: `${email?.subject ?? "Email"} · Averis x Monash` };
+  return { title: `${email?.subject ?? "Email"} · APRIL Group` };
 }
 
 const ICON = { size: 14, strokeWidth: 1.75, "aria-hidden": true } as const;

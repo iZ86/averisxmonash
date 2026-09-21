@@ -22,12 +22,18 @@ export function DetailHeader({
   onTabChange,
   onRetry,
   retrying,
+  extraActions,
+  hideComparisonActions = false,
 }: {
   email: BatchEmail;
   tab: DetailTab;
   onTabChange: (tab: DetailTab) => void;
   onRetry: () => void;
   retrying: boolean;
+  /** Extra buttons for the page the header is on (e.g. emailing the sender of a mismatch). */
+  extraActions?: React.ReactNode;
+  /** The Mismatches page has its own actions, so the Send to review / Export result pair is hidden there. */
+  hideComparisonActions?: boolean;
 }) {
   const canReview = email.result === "mismatch" || email.result === "no_mismatch";
 
@@ -45,7 +51,8 @@ export function DetailHeader({
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          {canReview && <ComparisonActions email={email} />}
+          {canReview && !hideComparisonActions && <ComparisonActions email={email} />}
+          {extraActions}
           {email.result === "failed" && (
             <button type="button" className="btn primary" disabled={retrying} onClick={onRetry}>
               {retrying ? "Retrying…" : "Retry"}

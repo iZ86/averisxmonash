@@ -50,7 +50,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
         <header className="flex items-center justify-between px-6 py-6 md:px-20">
           <div className="brand p-0">
             <i />
-            <span>Averis x Monash</span>
+            <span>APRIL Group</span>
           </div>
           <div className="flex items-center gap-3">
             <ThemeToggle />
@@ -67,7 +67,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
               <span className="text-accent">before the draft is final.</span>
             </h1>
             <p className="lead">
-              Your inbox mixes document checks, new instructions, invoice questions and spam. Averis x Monash finds the
+              Your inbox mixes document checks, new instructions, invoice questions and spam. APRIL Group finds the
               document requests, compares the Shipping Instruction with the draft Bill of Lading field by field, and
               hands anything uncertain to a person.
             </p>
