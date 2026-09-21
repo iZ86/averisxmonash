@@ -389,12 +389,12 @@ body {
     color: var(--text-label);
     padding: 12px 16px;
     background: var(--surface-inset);
+    white-space: nowrap;
   }
   .tbl td {
     padding: 14px 16px;
     border-top: 1px solid var(--border);
     vertical-align: middle;
-    overflow-wrap: anywhere;
   }
   /* Word/whole-value highlight in the SI vs BL comparison table. Never the only
      cue that a value differs (the row itself is also tinted): background +

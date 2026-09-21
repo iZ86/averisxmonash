@@ -69,13 +69,13 @@ export function ComparisonView({ email }: { email: BatchEmail }) {
                   const diff = f.match ? { si: [], bl: [] } : diffField(f.si, f.bl);
                   return (
                     <tr key={f.field} style={!f.match ? { background: "var(--status-mismatch-soft)" } : undefined}>
-                      <td>
+                      <td className="whitespace-nowrap">
                         <div className="font-medium">{FIELD_LABEL[f.field]}</div>
                         {f.blLabel && <div className="cap">BL calls it &ldquo;{f.blLabel}&rdquo;</div>}
                       </td>
                       <td><ValueCell value={f.si} match={f.match} diff={diff.si} /></td>
                       <td><ValueCell value={f.bl} match={f.match} diff={diff.bl} /></td>
-                      <td>
+                      <td className="whitespace-nowrap">
                         {f.match ? (
                           <span className="inline-flex items-center gap-1.5 text-status-match">
                             <CheckCircle2 {...ICON} />
