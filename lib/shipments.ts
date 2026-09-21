@@ -11,8 +11,9 @@ type ProcessedRow = {
   created_at: string;
 };
 
-type InvoiceRow = {
+type InstructionRow = {
   id: string;
+  created_at: string;
   shipper: string | null;
   consignee: string | null;
   notify_party: string | null;
@@ -61,12 +62,12 @@ type EmailRow = { id: string; subject: string; from_address: string; received_at
 export async function getShipments(): Promise<Shipment[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
-    .from("shipping_invoice")
+    .from("shipping_instructions")
     .select(
-      "id, shipper, consignee, notify_party, port_of_loading, port_of_discharge, container_count, gross_weight_kg, processed_emails(email_id, status, categories, created_at)",
+      "id, created_at, shipper, consignee, notify_party, port_of_loading, port_of_discharge, container_count, gross_weight_kg, processed_emails(email_id, status, categories, created_at)",
     )
-    .returns<InvoiceRow[]>();
-  if (error) throw new Error(`shipping_invoice: ${error.message}`);
+    .returns<InstructionRow[]>();
+  if (error) throw new Error(`shipping_instructions: ${error.message}`);
 
   const emailIds = [...new Set(data.map((r) => (Array.isArray(r.processed_emails) ? r.processed_emails[0] : r.processed_emails)?.email_id).filter((id): id is string => !!id && UUID.test(id)))];
   const emails = new Map<string, EmailRow>();
@@ -108,7 +109,7 @@ export async function getShipments(): Promise<Shipment[]> {
         result: RESULT[processed?.status ?? ""] ?? "not_compared",
         confidence: confidenceOf(processed?.categories ?? null),
       };
-      return { shipment, at: processed?.created_at ?? "" };
+      return { shipment, at: row.created_at };
     })
     .sort((a, b) => b.at.localeCompare(a.at))
     .map((s) => s.shipment);

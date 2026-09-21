@@ -98,6 +98,11 @@ function lookup(raw: string): ResolvedPort | null {
   const code = raw.toUpperCase().replace(/\s/g, "");
   if (/^[A-Z]{2}[A-Z0-9]{3}$/.test(code) && byCode.has(code)) return toResolved(byCode.get(code)!);
 
+  // An explicit UN/LOCODE in trailing brackets, e.g. "CALLAO, PERU (PECLL)", is the most reliable signal.
+  const bracketed = raw.match(/\(\s*([A-Za-z]{2}[A-Za-z0-9]{3})\s*\)\s*$/)?.[1].toUpperCase();
+  if (bracketed && byCode.has(bracketed)) return toResolved(byCode.get(bracketed)!);
+  raw = raw.replace(/\(\s*[A-Za-z]{2}[A-Za-z0-9]{3}\s*\)\s*$/, "").trim();
+
   const { name, country } = splitQuery(raw);
   const base = norm(name.replace(/\(.*?\)/g, ""));
   const inBrackets = [...name.matchAll(/\((.*?)\)/g)].map((m) => norm(m[1]));
