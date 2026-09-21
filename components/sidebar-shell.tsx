@@ -49,10 +49,12 @@ function setDesktopCollapsed(value: boolean) {
  */
 export function SidebarShell({
   reviewCount,
+  mismatchCount,
   userName,
   children,
 }: {
   reviewCount: number;
+  mismatchCount: number;
   userName: string;
   children: React.ReactNode;
 }) {
@@ -163,6 +165,7 @@ export function SidebarShell({
 
         <SideNav
           reviewCount={reviewCount}
+          mismatchCount={mismatchCount}
           collapsed={desktopCollapsed}
           onNavigate={() => setMobileOpen(false)}
         />
