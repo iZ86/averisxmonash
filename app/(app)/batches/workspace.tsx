@@ -23,6 +23,7 @@ import {
   getPendingQueueCount,
   getSyncStatus,
   listBatchEmails,
+  type SentFilter,
   markEmailRead,
   type BatchStats,
   type ReviewStats,
@@ -84,7 +85,10 @@ export function BatchesWorkspace({ mode = "all" }: { mode?: WorkspaceMode }) {
   const reason: ReviewReasonCode | null = isReview && isReviewReason(reasonParam) ? reasonParam : null;
   const fieldParam = params.get("field");
   const field: ReviewField | null = isMismatch && isField(fieldParam) ? fieldParam : null;
-  const filter = reason ?? field;
+  const sentParam = params.get("sent");
+  const sentFilter: SentFilter | null =
+    (isReview || isMismatch) && (sentParam === "pending" || sentParam === "emailed") ? sentParam : null;
+  const filter = [reason ?? field, sentFilter].filter(Boolean).join("+") || null;
   const defaultSort: Sort = isReview || isMismatch ? "oldest" : "newest";
   const sort: Sort = isSort(params.get("sort")) ? (params.get("sort") as Sort) : defaultSort;
   const page = Math.max(1, Number(params.get("page")) || 1);
@@ -162,6 +166,7 @@ export function BatchesWorkspace({ mode = "all" }: { mode?: WorkspaceMode }) {
         page,
         reason,
         field,
+        sent: sentFilter,
       });
       setRows(r);
       setTotal(t);
@@ -171,7 +176,7 @@ export function BatchesWorkspace({ mode = "all" }: { mode?: WorkspaceMode }) {
         description: err instanceof Error ? err.message : String(err),
       });
     }
-  }, [supabase, tab, q, sort, page, reason, field, filter]);
+  }, [supabase, tab, q, sort, page, reason, field, sentFilter, filter]);
 
   // Mount/dependency-driven fetches: inlined (not via the callbacks above) so
   // the state updates are visibly inside a .then() chain in the effect body.
@@ -192,9 +197,9 @@ export function BatchesWorkspace({ mode = "all" }: { mode?: WorkspaceMode }) {
     };
   }, [supabase, isReview, isMismatch]);
 
-  // Mismatches: which of the listed emails have already been emailed to their sender.
+  // Mismatches and the review queue: which of the listed emails have already been emailed to their sender.
   useEffect(() => {
-    if (!isMismatch) return;
+    if (!isMismatch && !isReview) return;
     let cancelled = false;
     getEmailSentIds(
       supabase,
@@ -205,7 +210,7 @@ export function BatchesWorkspace({ mode = "all" }: { mode?: WorkspaceMode }) {
     return () => {
       cancelled = true;
     };
-  }, [supabase, isMismatch, rows]);
+  }, [supabase, isMismatch, isReview, rows]);
 
   // Detect a sync already in progress (started by this tab before a refresh,
   // or by another tab/session) so the button shows as loading immediately,
@@ -283,7 +288,7 @@ export function BatchesWorkspace({ mode = "all" }: { mode?: WorkspaceMode }) {
   useEffect(() => {
     let cancelled = false;
     const key = listKeyFor(tab, q, sort, page, filter);
-    listBatchEmails(supabase, { tab, search: q, sort, page, reason, field })
+    listBatchEmails(supabase, { tab, search: q, sort, page, reason, field, sent: sentFilter })
       .then(({ rows: r, total: t }) => {
         if (cancelled) return;
         setRows(r);
@@ -299,7 +304,7 @@ export function BatchesWorkspace({ mode = "all" }: { mode?: WorkspaceMode }) {
     return () => {
       cancelled = true;
     };
-  }, [supabase, tab, q, sort, page, reason, field, filter]);
+  }, [supabase, tab, q, sort, page, reason, field, sentFilter, filter]);
 
   // Debounce the search box into the URL's `q` param.
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -511,7 +516,11 @@ export function BatchesWorkspace({ mode = "all" }: { mode?: WorkspaceMode }) {
     await Promise.all([refreshList(), refreshStats()]);
   }
 
-  const belowCount = stats?.belowThreshold ?? 0;
+  // Below-threshold should always include every email sent to review (even
+  // unscored ones), so it can never read lower than Needs review — guard the
+  // displayed number in case the server-side count (batch_email_stats) misses
+  // unscored rows, without changing what the server itself reports.
+  const belowCount = Math.max(stats?.belowThreshold ?? 0, stats?.needsReview ?? 0);
   const resolvedCount = 0;
   const reasonCount = (r: ReviewReasonCode) => reviewStats?.byReason[r] ?? 0;
   const fieldCount = (f: ReviewField) => mismatchStats?.byField[f] ?? 0;
@@ -650,7 +659,11 @@ export function BatchesWorkspace({ mode = "all" }: { mode?: WorkspaceMode }) {
           <Kpi
             label={`Below ${AUTO_ACCEPT_THRESHOLD}% confidence`}
             value={belowCount}
-            sub={`${resolvedCount} resolved · ${stats?.needsReview ?? 0} open`}
+            sub={
+            resolvedCount > 0
+              ? `${resolvedCount} resolved · ${stats?.needsReview ?? 0} open`
+              : `${stats?.needsReview ?? 0} sent to review`
+          }
             tone="orange"
           />
           <Kpi label="Needs review" value={stats?.needsReview ?? 0} sub="Waiting for a person" tone="orange" />
@@ -730,6 +743,32 @@ export function BatchesWorkspace({ mode = "all" }: { mode?: WorkspaceMode }) {
         {searchBox}
       </div>
 
+      {(isReview || isMismatch) && (
+        <div className="seg w-fit" role="group" aria-label="Filter by email status">
+          {(
+            [
+              { key: null, label: "All", count: (isReview ? reviewStats?.total : mismatchStats?.total) ?? 0 },
+              {
+                key: "pending",
+                label: "Pending",
+                count: Math.max(0, ((isReview ? reviewStats?.total : mismatchStats?.total) ?? 0) - ((isReview ? reviewStats?.notified : mismatchStats?.notified) ?? 0)),
+              },
+              { key: "emailed", label: "Emailed", count: (isReview ? reviewStats?.notified : mismatchStats?.notified) ?? 0 },
+            ] as const
+          ).map((o) => (
+            <button
+              key={o.label}
+              type="button"
+              aria-pressed={sentFilter === o.key}
+              className={sentFilter === o.key ? "on" : undefined}
+              onClick={() => setParams({ sent: o.key, page: null, email: null })}
+            >
+              {o.label} {o.count}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="grid items-start gap-5 [@media(min-width:1180px)]:grid-cols-[372px_minmax(0,1fr)]">
         <ListPanel
           rows={rows}
@@ -743,6 +782,7 @@ export function BatchesWorkspace({ mode = "all" }: { mode?: WorkspaceMode }) {
             isReview ? { one: "case", many: "cases" } : isMismatch ? { one: "mismatch", many: "mismatches" } : undefined
           }
           variant={isReview ? "review" : isMismatch ? "mismatch" : "all"}
+          sentIds={isReview ? sentIds : undefined}
           selection={
             isMismatch ? { checked, sent: sentIds, onToggle: toggleChecked, onToggleAll: toggleAllChecked } : undefined
           }
@@ -805,13 +845,7 @@ export function BatchesWorkspace({ mode = "all" }: { mode?: WorkspaceMode }) {
               ) : needsContent && contentLoading ? (
                 <div className="card p-8 text-center text-text-muted">Loading email content…</div>
               ) : detailTab === "email" ? (
-                <EmailView
-                  email={displayedDetail}
-                  onOpenAttachment={(id) => {
-                    setAttachmentId(id);
-                    setDetailTab("attachments");
-                  }}
-                />
+                <EmailView email={displayedDetail} />
               ) : detailTab === "attachments" ? (
                 <AttachmentsView
                   email={displayedDetail}
@@ -879,7 +913,8 @@ function tabCount(stats: BatchStats | null, key: Tab): number {
     case "mismatch":
       return 0;
     case "low":
-      return stats.belowThreshold;
+      // Same floor as the KPI card above: never fewer than Needs review.
+      return Math.max(stats.belowThreshold, stats.needsReview);
     case "failed":
       return stats.failed;
   }

@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { fmtFull } from "@/lib/batches/format";
 import { isOwnAddress } from "@/lib/batches/constants";
 import { CATEGORY_LABEL } from "@/lib/labels";
@@ -36,6 +38,7 @@ export function DetailHeader({
   /** The Mismatches page has its own actions, so the Send to review / Export result pair is hidden there. */
   hideComparisonActions?: boolean;
 }) {
+  const pathname = usePathname();
   // Our own messages are never analysed: no analysis tab, no category/status chips, no retry.
   const ours = isOwnAddress(email.fromAddress);
   const canReview = !ours && (email.result === "mismatch" || email.result === "no_mismatch");
@@ -61,6 +64,11 @@ export function DetailHeader({
         </div>
         <div className="flex flex-wrap gap-2">
           {canReview && !hideComparisonActions && <ComparisonActions email={email} />}
+          {email.result === "needs_review" && !pathname.startsWith("/review") && (
+            <Link className="btn ghost" href={`/review?email=${email.id}`}>
+              View in Review Queue
+            </Link>
+          )}
           {extraActions}
           {!ours && email.result === "failed" && (
             <button type="button" className="btn primary" disabled={retrying} onClick={onRetry}>

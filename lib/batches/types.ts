@@ -107,12 +107,13 @@ export type BatchEmail = {
 
   attachments: { id: string; filename: string; mimeType: string | null; sizeBytes: number | null }[];
 
-  /** Per-field SI/BL values + confidence. Not populated by the current
-   * classification pipeline (v1 ships without them) — always empty today, kept
-   * so the moved comparison-report/review components keep working unchanged if
-   * this is extended later. */
+  /** Per-field SI/BL values, joined in from `shipping_instructions` and
+   * `bill_of_lading` by `getBatchEmailDetail`. Set for mismatch, no_mismatch and
+   * needs_review results — otherwise there's nothing to show. No per-field confidence:
+   * the classifier only ever scored the email as a whole. */
   fields?: FieldComparison[];
-  /** Highlighted source-document evidence. Same story as `fields`: never
-   * populated today, kept for forward-compatibility with the moved components. */
+  /** Highlighted source-document evidence. Not populated by the current
+   * classification pipeline (no highlighted-excerpt data is stored) — kept for
+   * forward-compatibility with the moved components. */
   evidence?: { si: string[]; bl: string[]; flagged?: Field };
 };

@@ -9,7 +9,7 @@ type Attachment = BatchEmail["attachments"][number];
 
 const ICON = { size: 16, strokeWidth: 1.75, "aria-hidden": true } as const;
 
-const fmtSize = (bytes: number | null) => {
+export const fmtSize = (bytes: number | null) => {
   if (bytes === null) return "";
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
@@ -18,7 +18,7 @@ const fmtSize = (bytes: number | null) => {
 
 export const attachmentUrl = (id: string, mode?: "download" | "preview") => `/api/attachments/${id}${mode ? `?${mode}=1` : ""}`;
 
-function FileGlyph({ attachment }: { attachment: Attachment }) {
+export function FileGlyph({ attachment }: { attachment: Attachment }) {
   const kind = previewKind(attachment.filename, attachment.mimeType);
   if (kind === "image") return <ImageIcon {...ICON} />;
   if (kind) return <FileText {...ICON} />;
@@ -85,7 +85,7 @@ function HtmlPreview({ attachment }: { attachment: Attachment }) {
   return <iframe sandbox="" srcDoc={state.html} title={attachment.filename} className="h-[640px] w-full border-0 bg-white" />;
 }
 
-function Preview({ attachment }: { attachment: Attachment }) {
+export function Preview({ attachment }: { attachment: Attachment }) {
   const kind = previewKind(attachment.filename, attachment.mimeType);
   const url = attachmentUrl(attachment.id);
 
