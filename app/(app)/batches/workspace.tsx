@@ -509,7 +509,11 @@ export function BatchesWorkspace({ mode = "all" }: { mode?: WorkspaceMode }) {
     await Promise.all([refreshList(), refreshStats()]);
   }
 
-  const belowCount = stats?.belowThreshold ?? 0;
+  // Below-threshold should always include every email sent to review (even
+  // unscored ones), so it can never read lower than Needs review — guard the
+  // displayed number in case the server-side count (batch_email_stats) misses
+  // unscored rows, without changing what the server itself reports.
+  const belowCount = Math.max(stats?.belowThreshold ?? 0, stats?.needsReview ?? 0);
   const resolvedCount = 0;
   const reasonCount = (r: ReviewReasonCode) => reviewStats?.byReason[r] ?? 0;
   const fieldCount = (f: ReviewField) => mismatchStats?.byField[f] ?? 0;
@@ -648,7 +652,11 @@ export function BatchesWorkspace({ mode = "all" }: { mode?: WorkspaceMode }) {
           <Kpi
             label={`Below ${AUTO_ACCEPT_THRESHOLD}% confidence`}
             value={belowCount}
-            sub={`${resolvedCount} resolved · ${stats?.needsReview ?? 0} open`}
+            sub={
+            resolvedCount > 0
+              ? `${resolvedCount} resolved · ${stats?.needsReview ?? 0} open`
+              : `${stats?.needsReview ?? 0} sent to review`
+          }
             tone="orange"
           />
           <Kpi label="Needs review" value={stats?.needsReview ?? 0} sub="Waiting for a person" tone="orange" />
@@ -877,7 +885,8 @@ function tabCount(stats: BatchStats | null, key: Tab): number {
     case "mismatch":
       return 0;
     case "low":
-      return stats.belowThreshold;
+      // Same floor as the KPI card above: never fewer than Needs review.
+      return Math.max(stats.belowThreshold, stats.needsReview);
     case "failed":
       return stats.failed;
   }

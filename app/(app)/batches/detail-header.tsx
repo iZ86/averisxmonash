@@ -1,7 +1,7 @@
 "use client";
 
 import { fmtFull } from "@/lib/batches/format";
-import { CATEGORY_LABEL } from "@/lib/mock/data";
+import { CATEGORY_LABEL } from "@/lib/labels";
 import type { BatchEmail } from "@/lib/batches/types";
 import { ComparisonActions } from "./comparison-view";
 
