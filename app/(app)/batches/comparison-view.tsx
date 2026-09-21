@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Confidence, ResultBadge } from "@/components/ui";
 import { AUTO_ACCEPT_THRESHOLD } from "@/lib/confidence";
 import { FIELD_LABEL } from "@/lib/labels";
-import { orderedFields, mismatchSummary, matchSummary } from "@/lib/batches/comparison-report";
+import { orderedFields, differingFieldLabels, matchSummary } from "@/lib/batches/comparison-report";
 import { diffField, displayValue, type DiffSegment } from "@/lib/batches/word-diff";
 import type { BatchEmail } from "@/lib/batches/types";
 import type { FieldComparison } from "@/lib/types";
@@ -43,7 +43,13 @@ export function ComparisonView({ email }: { email: BatchEmail }) {
           {bad ? <AlertTriangle size={24} strokeWidth={1.75} aria-hidden /> : <CheckCircle2 size={24} strokeWidth={1.75} aria-hidden />}
           <div>
             <div className="title text-base">{bad ? "Mismatch found" : "No mismatch detected"}</div>
-            <div className="text-text-strong">{fields.length > 0 ? (bad ? mismatchSummary(fields) : matchSummary(fields)) : "No field-level comparison is available for this email."}</div>
+            {bad && fields.length > 0 ? (
+              <ul className="list-disc pl-5 text-text-strong">
+                {differingFieldLabels(fields).map((label) => <li key={label}>{label}</li>)}
+              </ul>
+            ) : (
+              <div className="text-text-strong">{fields.length > 0 ? matchSummary(fields) : "No field-level comparison is available for this email."}</div>
+            )}
           </div>
         </div>
         <div className="flex flex-col items-end gap-1">
