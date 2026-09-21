@@ -1,12 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, Flag, LoaderCircle, Mail } from "lucide-react";
+import { ArrowLeftRight, CheckCircle2, Flag, LoaderCircle, Mail } from "lucide-react";
 import { toast } from "sonner";
 import {
   REVIEW_CASES,
   REVIEW_FIELDS,
-  REVIEW_FIELD_LABEL,
   actionLabel,
   isReviewReason,
   replyContent,
@@ -14,7 +13,10 @@ import {
   type ReviewReasonCode,
 } from "@/lib/batches/review-cases";
 import { REVIEW_REASON_TEXT } from "@/lib/batches/map-labels";
+import { DOC_LABEL, blankCells, missingAttachmentRoles } from "@/lib/batches/review-evidence";
+import { FIELD_LABEL } from "@/lib/labels";
 import type { BatchEmail } from "@/lib/batches/types";
+import { FieldTable } from "./field-table";
 
 type Resolution = { decision: "accepted" | "rejected"; action: string };
 type Loaded = { defaults: FieldValues | null; resolution: Resolution | null; emailSent: boolean };
@@ -45,6 +47,9 @@ export function ReviewView({ email, onResolved }: { email: BatchEmail; onResolve
   // Cases that can only be rejected (missing attachment / missing value) go straight to the email; the others let the reviewer choose.
   const activeMode = kase && !kase.accept ? "reject" : mode;
   const [fields, setFields] = useState<FieldValues>(blank);
+  const [blFields, setBlFields] = useState<FieldValues>(() =>
+    Object.fromEntries(REVIEW_FIELDS.map((f) => [f, String(email.fields?.find((x) => x.field === f)?.bl ?? "")])) as FieldValues,
+  );
   const [busy, setBusy] = useState(false);
 
   const processedId = email.processedId;
@@ -72,7 +77,18 @@ export function ReviewView({ email, onResolved }: { email: BatchEmail; onResolve
   // The reviewer may edit the subject and body; the recipient is always the original sender.
   const [draft, setDraft] = useState<{ subject: string; body: string } | null>(null);
   const reply = template && { to: template.to, subject: draft?.subject ?? template.subject, body: draft?.body ?? template.body };
-  const allFilled = REVIEW_FIELDS.every((f) => fields[f].trim());
+  // Maps the two documents onto each other: any blank value on one side is filled from the other. Nothing already typed is overwritten.
+  const syncDetails = () => {
+    const nextSi = { ...fields };
+    const nextBl = { ...blFields };
+    for (const f of REVIEW_FIELDS) {
+      if (!nextSi[f].trim()) nextSi[f] = blFields[f];
+      if (!nextBl[f].trim()) nextBl[f] = fields[f];
+    }
+    setFields(nextSi);
+    setBlFields(nextBl);
+  };
+  const allFilled = REVIEW_FIELDS.every((f) => fields[f].trim() && blFields[f].trim());
 
   async function run(task: () => Promise<void>) {
     setBusy(true);
@@ -90,7 +106,7 @@ export function ReviewView({ email, onResolved }: { email: BatchEmail; onResolve
 
   const saveAccepted = () =>
     run(async () => {
-      await post({ processedEmailId: email.processedId, decision: "accepted", fieldValues: fields });
+      await post({ processedEmailId: email.processedId, decision: "accepted", fieldValues: fields, blFieldValues: blFields });
       toast.success("Details confirmed and saved", { description: email.subject });
       await load();
       onResolved();
@@ -105,6 +121,16 @@ export function ReviewView({ email, onResolved }: { email: BatchEmail; onResolve
       onResolved();
     });
 
+  // The decision buttons show once the case has loaded and is unresolved; the SI/BL table follows them.
+  const showDecision = Boolean(email.processedId && kase && reason && data && !data.resolution);
+  const evidence = (
+    <>
+      {reason === "missing_attachment" && <MissingDocuments email={email} />}
+      {reason === "missing_value" && <BlankValues email={email} />}
+      {email.fields && mode !== "accept" && <FieldTable fields={email.fields} attachments={email.attachments} />}
+    </>
+  );
+
   return (
     <div className="flex flex-col gap-4">
       <div className="card flex items-start gap-3 border-transparent px-6 py-5 text-status-review" style={{ background: "var(--accent-soft)" }}>
@@ -116,6 +142,8 @@ export function ReviewView({ email, onResolved }: { email: BatchEmail; onResolve
           </div>
         </div>
       </div>
+
+      {!showDecision && evidence}
 
       {!email.processedId || !kase || !reason ? (
         <div className="card p-5">
@@ -165,6 +193,8 @@ export function ReviewView({ email, onResolved }: { email: BatchEmail; onResolve
           ) : (
             data.emailSent && <SentNotice />
           )}
+
+          {evidence}
 
           {activeMode === "reject" && !data.emailSent && (
             <div className="card flex flex-col gap-4 p-5">
@@ -221,39 +251,77 @@ export function ReviewView({ email, onResolved }: { email: BatchEmail; onResolve
 
           {mode === "accept" && (
             <div className="card flex flex-col gap-4 p-5">
-              <div>
-                <h2 className="title">Confirm the 7 fields</h2>
-                <p className="cap">
-                  {data.defaults ? "Filled in from what the system read. Check each value against the document and correct it where needed." : "Enter each value as it appears on the document."}
-                </p>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 className="title">Confirm the details</h2>
+                  <p className="cap">
+                    {data.defaults ? "Filled in from what the system read. Check each value against the document and correct it where needed." : "Enter each value as it appears on the document."}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="btn ghost sm"
+                  title="Fill each blank SI or BL value from the other document. Values already entered are kept."
+                  onClick={syncDetails}
+                >
+                  <ArrowLeftRight size={14} strokeWidth={1.75} aria-hidden /> Sync SI / BL details
+                </button>
               </div>
 
-              <div className="flex flex-col gap-3">
-                {REVIEW_FIELDS.map((f) => (
-                  <div key={f} className="grid gap-1.5 md:grid-cols-[150px_minmax(0,1fr)] md:items-center md:gap-4">
-                    <label className="lbl" htmlFor={`field-${f}`}>{REVIEW_FIELD_LABEL[f]}</label>
-                    <div className="input">
-                      <input
-                        id={`field-${f}`}
-                        className="w-full bg-transparent outline-none"
-                        value={fields[f]}
-                        onChange={(e) => setFields((v) => ({ ...v, [f]: e.target.value }))}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <FieldTable
+                fields={email.fields ?? REVIEW_FIELDS.map((f) => ({ field: f, si: null, bl: null, match: true, confidence: null }))}
+                attachments={email.attachments}
+                edit={{
+                  si: fields,
+                  bl: blFields,
+                  onChange: (role, field, value) => (role === "si" ? setFields : setBlFields)((v) => ({ ...v, [field]: value })),
+                }}
+              />
 
               <div className="flex flex-wrap items-center gap-2">
                 <button type="button" className="btn accent" disabled={busy || !allFilled} onClick={saveAccepted}>
                   {busy ? "Saving…" : "Confirm details and save"}
                 </button>
-                {!allFilled && <span className="cap">Fill in all 7 fields to continue.</span>}
+                {!allFilled && <span className="cap">Fill in all 7 fields on both documents to continue.</span>}
               </div>
             </div>
           )}
         </>
       )}
+    </div>
+  );
+}
+
+function MissingDocuments({ email }: { email: BatchEmail }) {
+  const roles = missingAttachmentRoles(email.fields ?? [], email.attachments.length);
+  return (
+    <div className="card flex flex-col gap-2 p-5">
+      <h2 className="title">Missing documents</h2>
+      {roles.length > 0 ? (
+        <ul className="list-disc pl-5">
+          {roles.map((role) => <li key={role}>{DOC_LABEL[role]}</li>)}
+        </ul>
+      ) : (
+        <p className="cap">Both documents have content, so the system could not tell which one is missing. Check the attachments.</p>
+      )}
+      <p className="cap">
+        {email.attachments.length > 0
+          ? `Attached: ${email.attachments.map((a) => a.filename).join(", ")}.`
+          : "Nothing is attached to this email."}
+      </p>
+    </div>
+  );
+}
+
+function BlankValues({ email }: { email: BatchEmail }) {
+  const cells = blankCells(email.fields ?? []);
+  if (cells.length === 0) return null;
+  return (
+    <div className="card flex flex-col gap-2 p-5">
+      <h2 className="title">Values missing or unreadable on the document</h2>
+      <ul className="list-disc pl-5">
+        {cells.map((c) => <li key={`${c.role}-${c.field}`}>{FIELD_LABEL[c.field]}: {DOC_LABEL[c.role]}</li>)}
+      </ul>
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
-import { toast } from "sonner";
+import Link from "next/link";
 import { Confidence, ResultBadge } from "@/components/ui";
 import { AUTO_ACCEPT_THRESHOLD } from "@/lib/confidence";
 import { FIELD_LABEL } from "@/lib/labels";
@@ -141,13 +141,11 @@ export function ComparisonActions({ email }: { email: BatchEmail }) {
 
   return (
     <>
-      <button
-        type="button"
-        className="btn ghost"
-        onClick={() => toast.success("Sent to review", { description: email.subject })}
-      >
-        Send to review
-      </button>
+      {email.result === "mismatch" && (
+        <Link className="btn ghost" href={`/mismatches?email=${email.id}`}>
+          View in Mismatches
+        </Link>
+      )}
       <button type="button" className="btn primary" onClick={exportResult}>
         Export result
       </button>

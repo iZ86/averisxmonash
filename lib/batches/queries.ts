@@ -8,6 +8,9 @@ import type { Field, FieldComparison } from "@/lib/types";
 
 export const PAGE_SIZE = 8;
 
+/** Review queue / Mismatches filter: cases whose sender has been emailed, or that are still waiting. */
+export type SentFilter = "pending" | "emailed";
+
 export type Tab = "all" | "comparison" | "review" | "low" | "failed" | "mismatch";
 export type Sort = "newest" | "lowest" | "oldest";
 
@@ -78,7 +81,7 @@ function fromViewRow(row: BatchEmailViewRow, attachments: AttachmentRow[] = [], 
 
 export async function listBatchEmails(
   supabase: SupabaseClient,
-  opts: { tab: Tab; search: string; sort: Sort; page: number; reason?: ReviewReasonCode | null; field?: ReviewField | null; },
+  opts: { tab: Tab; search: string; sort: Sort; page: number; reason?: ReviewReasonCode | null; field?: ReviewField | null; sent?: SentFilter | null; },
 ): Promise<{ rows: BatchEmail[]; total: number; }> {
   const from = (opts.page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
@@ -102,6 +105,24 @@ export async function listBatchEmails(
   // no score at all (a plain `.lt` excludes nulls and would under-count).
   else if (opts.tab === "low") query = query.or(`overall_confidence.lt.${AUTO_ACCEPT_THRESHOLD},result.eq.needs_review`);
   else if (opts.tab === "failed") query = query.eq("result", "failed");
+
+  // Emailed vs pending lives on processed_emails.email_sent, which the view doesn't expose,
+  // so look up the emailed ids first and filter the list by them.
+  if (opts.sent && (opts.tab === "review" || opts.tab === "mismatch")) {
+    const { data: sentRows, error: sentError } = await supabase
+      .from("processed_emails")
+      .select("id")
+      .eq("email_sent", true)
+      .eq("status", opts.tab === "review" ? "NEEDS_REVIEW" : "MISMATCH");
+    if (sentError) throw sentError;
+    const sentIds = (sentRows ?? []).map((r: { id: string }) => r.id);
+    if (opts.sent === "emailed") {
+      if (sentIds.length === 0) return { rows: [], total: 0 };
+      query = query.in("processed_id", sentIds);
+    } else if (sentIds.length > 0) {
+      query = query.not("processed_id", "in", `(${sentIds.join(",")})`);
+    }
+  }
 
   const q = opts.search.trim();
   if (q) {
@@ -234,9 +255,10 @@ export async function getBatchEmailDetail(supabase: SupabaseClient, id: string):
   const row = viewRow as unknown as BatchEmailViewRow;
   const email = fromViewRow(row, (attachments ?? []) as AttachmentRow[]);
 
-  // The field table only applies once there's something to compare — fetch the
-  // two documents' transcribed values just for that case, not on every email.
-  if (row.processed_id && (row.result === "mismatch" || row.result === "no_mismatch")) {
+  // The field table applies once there's something to compare, and to review
+  // cases (which show what was read from each document). Fetch the two
+  // documents' transcribed values only for those, not on every email.
+  if (row.processed_id && (row.result === "mismatch" || row.result === "no_mismatch" || row.result === "needs_review")) {
     const [{ data: siRow, error: siError }, { data: blRow, error: blError }] = await Promise.all([
       supabase.from("shipping_instructions").select(DOCUMENT_VALUE_COLUMNS).eq("processed_email_id", row.processed_id).maybeSingle(),
       supabase.from("bill_of_lading").select(DOCUMENT_VALUE_COLUMNS).eq("processed_email_id", row.processed_id).maybeSingle(),
