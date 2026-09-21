@@ -170,7 +170,7 @@ export default async function DashboardPage() {
       <Queue
         title="Needs your review, oldest first"
         href="/review"
-        rowHref={(id) => `/batches?tab=review&email=${id}`}
+        rowHref={(id) => `/review?email=${id}`}
         cta="Open review queue"
         items={s.reviewQueue}
         empty="Nothing waiting for review."

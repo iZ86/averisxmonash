@@ -5,9 +5,7 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["searoute-js"],
   async redirects() {
     return [
-      // Review queue and Gmail inbox were merged into Batches.
-      { source: "/review", destination: "/batches?tab=review", permanent: false },
-      { source: "/review/:path*", destination: "/batches?tab=review", permanent: false },
+      // The Gmail inbox was merged into Batches.
       { source: "/inbox", destination: "/batches", permanent: false },
       { source: "/inbox/:path*", destination: "/batches", permanent: false },
     ];

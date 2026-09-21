@@ -15,14 +15,17 @@ import {
   getBatchEmailContent,
   getBatchEmailDetail,
   getBatchStats,
+  getReviewStats,
   getLastSyncedAt,
   getPendingQueueCount,
   getSyncStatus,
   listBatchEmails,
   markEmailRead,
   type BatchStats,
+  type ReviewStats,
 } from "@/lib/batches/queries";
 import type { BatchEmail } from "@/lib/batches/types";
+import { REVIEW_CASES, isReviewReason, type ReviewReasonCode } from "@/lib/batches/review-cases";
 import { ListPanel } from "./list-panel";
 import { DetailHeader, type DetailTab } from "./detail-header";
 import { ComparisonView } from "./comparison-view";
@@ -38,24 +41,38 @@ import {
 const isTab = (v: string | null): v is Tab =>
   !!v && TABS.some((t) => t.key === v);
 const isSort = (v: string | null): v is Sort =>
-  v === "newest" || v === "lowest";
+  v === "newest" || v === "lowest" || v === "oldest";
+
+const REASON_ORDER: ReviewReasonCode[] = ["wrong_doc_type", "missing_attachment", "unreadable", "missing_value"];
+const REASON_SUB: Record<ReviewReasonCode, string> = {
+  wrong_doc_type: "Confirm or reject",
+  missing_attachment: "Request the file",
+  unreadable: "Confirm or reject",
+  missing_value: "Ask to resend",
+};
+
+/**
+ * "all" is the Batches page. "review" is the Review Queue: the same workspace limited to
+ * NEEDS_REVIEW cases, filtered by review reason, oldest first, with review-specific metrics.
+ */
+export type WorkspaceMode = "all" | "review";
 
 function defaultDetailTab(): DetailTab {
   return "analysis";
 }
 
-export function BatchesWorkspace() {
+export function BatchesWorkspace({ mode = "all" }: { mode?: WorkspaceMode }) {
+  const isReview = mode === "review";
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
   const supabase = useMemo(() => createClient(), []);
 
-  const tab: Tab = isTab(params.get("tab"))
-    ? (params.get("tab") as Tab)
-    : "all";
-  const sort: Sort = isSort(params.get("sort"))
-    ? (params.get("sort") as Sort)
-    : "newest";
+  const tab: Tab = isReview ? "review" : isTab(params.get("tab")) ? (params.get("tab") as Tab) : "all";
+  const reasonParam = params.get("reason");
+  const reason: ReviewReasonCode | null = isReview && isReviewReason(reasonParam) ? reasonParam : null;
+  const defaultSort: Sort = isReview ? "oldest" : "newest";
+  const sort: Sort = isSort(params.get("sort")) ? (params.get("sort") as Sort) : defaultSort;
   const page = Math.max(1, Number(params.get("page")) || 1);
   const q = params.get("q") ?? "";
   const selectedId = params.get("email");
@@ -73,14 +90,15 @@ export function BatchesWorkspace() {
   // `listKey` identifies which params produced `rows`/`total`; listLoading is
   // derived by comparing it to the current params (same pattern as the old
   // Gmail inbox page's `list.key`), so no effect ever calls setState synchronously.
-  const listKeyFor = (t: Tab, search: string, s: Sort, p: number) =>
-    `${t}|${search}|${s}|${p}`;
+  const listKeyFor = (t: Tab, search: string, s: Sort, p: number, r: string | null) =>
+    `${t}|${search}|${s}|${p}|${r ?? ""}`;
   const [rows, setRows] = useState<BatchEmail[]>([]);
   const [total, setTotal] = useState(0);
   const [listKey, setListKey] = useState("");
-  const listLoading = listKey !== listKeyFor(tab, q, sort, page);
+  const listLoading = listKey !== listKeyFor(tab, q, sort, page, reason);
 
   const [stats, setStats] = useState<BatchStats | null>(null);
+  const [reviewStats, setReviewStats] = useState<ReviewStats | null>(null);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [retrying, setRetrying] = useState(false);
@@ -110,12 +128,13 @@ export function BatchesWorkspace() {
   // Reusable versions for event handlers (sync/retry/resolve) to call after a mutation.
   const refreshStats = useCallback(async () => {
     const [s, synced] = await Promise.all([
-      getBatchStats(supabase),
+      isReview ? getReviewStats(supabase) : getBatchStats(supabase),
       getLastSyncedAt(supabase),
     ]);
-    setStats(s);
+    if (isReview) setReviewStats(s as ReviewStats);
+    else setStats(s as BatchStats);
     setLastSyncedAt(synced);
-  }, [supabase]);
+  }, [supabase, isReview]);
 
   const refreshList = useCallback(async () => {
     try {
@@ -124,32 +143,35 @@ export function BatchesWorkspace() {
         search: q,
         sort,
         page,
+        reason,
       });
       setRows(r);
       setTotal(t);
-      setListKey(listKeyFor(tab, q, sort, page));
+      setListKey(listKeyFor(tab, q, sort, page, reason));
     } catch (err) {
       toast.error("Could not load emails.", {
         description: err instanceof Error ? err.message : String(err),
       });
     }
-  }, [supabase, tab, q, sort, page]);
+  }, [supabase, tab, q, sort, page, reason]);
 
   // Mount/dependency-driven fetches: inlined (not via the callbacks above) so
   // the state updates are visibly inside a .then() chain in the effect body.
   useEffect(() => {
     let cancelled = false;
-    Promise.all([getBatchStats(supabase), getLastSyncedAt(supabase)]).then(
-      ([s, synced]) => {
-        if (cancelled) return;
-        setStats(s);
-        setLastSyncedAt(synced);
-      },
-    );
+    Promise.all([
+      isReview ? getReviewStats(supabase) : getBatchStats(supabase),
+      getLastSyncedAt(supabase),
+    ]).then(([s, synced]) => {
+      if (cancelled) return;
+      if (isReview) setReviewStats(s as ReviewStats);
+      else setStats(s as BatchStats);
+      setLastSyncedAt(synced);
+    });
     return () => {
       cancelled = true;
     };
-  }, [supabase]);
+  }, [supabase, isReview]);
 
   // Detect a sync already in progress (started by this tab before a refresh,
   // or by another tab/session) so the button shows as loading immediately,
@@ -226,8 +248,8 @@ export function BatchesWorkspace() {
 
   useEffect(() => {
     let cancelled = false;
-    const key = listKeyFor(tab, q, sort, page);
-    listBatchEmails(supabase, { tab, search: q, sort, page })
+    const key = listKeyFor(tab, q, sort, page, reason);
+    listBatchEmails(supabase, { tab, search: q, sort, page, reason })
       .then(({ rows: r, total: t }) => {
         if (cancelled) return;
         setRows(r);
@@ -243,7 +265,7 @@ export function BatchesWorkspace() {
     return () => {
       cancelled = true;
     };
-  }, [supabase, tab, q, sort, page]);
+  }, [supabase, tab, q, sort, page, reason]);
 
   // Debounce the search box into the URL's `q` param.
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -403,30 +425,30 @@ export function BatchesWorkspace() {
     }
   }
 
-  function onResolved() {
+  // A review decision changes the email's result (accepted) or its state (rejected), so reload it,
+  // the list and the counts from the database.
+  async function onResolved() {
     if (!selectedId) return;
-    // Client-local only today: nothing about a manual correction is persisted
-    // yet (no per-field value storage exists — see the "field values" gap
-    // noted in the implementation summary). Advance to the next case so the
-    // reviewer can keep moving, matching the old Review queue's behaviour.
-    const remaining = rows.filter((r) => r.id !== selectedId);
-    setRows(remaining);
-    setParams({ email: remaining[0]?.id ?? null });
+    const refreshed = await getBatchEmailDetail(supabase, selectedId);
+    setDetail(refreshed);
+    await Promise.all([refreshList(), refreshStats()]);
   }
 
   const belowCount = stats?.belowThreshold ?? 0;
-  const resolvedCount = 0; // no persistence for resolutions yet — see onResolved
+  const resolvedCount = 0;
+  const reasonCount = (r: ReviewReasonCode) => reviewStats?.byReason[r] ?? 0;
   const displayedDetail = selectedId ? detail : null;
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-4">
         <div>
-          <div className="eyebrow">Batches</div>
-          <h1 className="h1">Batches</h1>
+          <div className="eyebrow">{isReview ? "Human in the loop" : "Batches"}</div>
+          <h1 className="h1">{isReview ? "Review queue" : "Batches"}</h1>
           <p className="p">
-            Every stored email with its category, confidence and result. Cases
-            the system could not decide are marked Needs review.
+            {isReview
+              ? "Cases the system could not decide on its own. Confirm the details yourself, or reject and ask the sender for a better document."
+              : "Every stored email with its category, confidence and result. Cases the system could not decide are marked Needs review."}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-4">
@@ -445,10 +467,12 @@ export function BatchesWorkspace() {
               />
               {syncing ? "Syncing…" : "Sync emails"}
             </button>
-            <Link href="/upload" className="btn accent shadow-sm hover:shadow">
-              <Upload size={16} strokeWidth={1.75} aria-hidden />
-              Upload data
-            </Link>
+            {!isReview && (
+              <Link href="/upload" className="btn accent shadow-sm hover:shadow">
+                <Upload size={16} strokeWidth={1.75} aria-hidden />
+                Upload data
+              </Link>
+            )}
           </div>
           <p className="cap" aria-live="polite">
             {syncing
@@ -460,6 +484,19 @@ export function BatchesWorkspace() {
         </div>
       </div>
 
+      {isReview ? (
+        <section className="grid grid-cols-2 gap-4 lg:grid-cols-5" aria-label="Review summary">
+          <Kpi
+            label="Open cases"
+            value={(reviewStats?.total ?? 0).toLocaleString("en-US")}
+            sub="Waiting for a person"
+            tone="orange"
+          />
+          {REASON_ORDER.map((r) => (
+            <Kpi key={r} label={REVIEW_CASES[r].title} value={reasonCount(r)} sub={REASON_SUB[r]} />
+          ))}
+        </section>
+      ) : (
       <section
         className="grid grid-cols-2 gap-4 lg:grid-cols-5"
         aria-label="Batch summary"
@@ -496,8 +533,32 @@ export function BatchesWorkspace() {
           tone="coral"
         />
       </section>
+      )}
 
       <div className="flex flex-wrap items-center justify-between gap-4">
+        {isReview ? (
+          <div className="seg" role="group" aria-label="Filter by review reason">
+            <button
+              type="button"
+              aria-pressed={!reason}
+              className={!reason ? "on" : undefined}
+              onClick={() => setParams({ reason: null, page: null, email: null })}
+            >
+              All {reviewStats?.total ?? 0}
+            </button>
+            {REASON_ORDER.map((r) => (
+              <button
+                key={r}
+                type="button"
+                aria-pressed={reason === r}
+                className={reason === r ? "on" : undefined}
+                onClick={() => setParams({ reason: r, page: null, email: null })}
+              >
+                {REVIEW_CASES[r].title} {reasonCount(r)}
+              </button>
+            ))}
+          </div>
+        ) : (
         <div className="seg" role="group" aria-label="Filter emails">
           {TABS.map((t) => (
             <button
@@ -517,6 +578,7 @@ export function BatchesWorkspace() {
             </button>
           ))}
         </div>
+        )}
         <label className="input relative min-w-[260px] flex-1 max-w-[360px]">
           <Search
             size={16}
@@ -545,8 +607,14 @@ export function BatchesWorkspace() {
           selectedId={selectedId}
           loading={listLoading}
           onSelect={(id) => setParams({ email: id })}
+          noun={isReview ? { one: "case", many: "cases" } : undefined}
+          variant={isReview ? "review" : "all"}
           onSortToggle={() =>
-            setParams({ sort: sort === "newest" ? "lowest" : null, page: null })
+            setParams(
+              isReview
+                ? { sort: sort === "oldest" ? "newest" : null, page: null }
+                : { sort: sort === "newest" ? "lowest" : null, page: null },
+            )
           }
           onPageChange={(p) => setParams({ page: p === 1 ? null : String(p) })}
         />
@@ -557,9 +625,9 @@ export function BatchesWorkspace() {
         >
           {!displayedDetail ? (
             <div className="card flex flex-col items-center gap-1 p-12 text-center">
-              <b className="text-text-strong">Select an email</b>
+              <b className="text-text-strong">{isReview ? "Select a case" : "Select an email"}</b>
               <span className="cap">
-                Its analysis and content show up here.
+                {isReview ? "The reason and your options show up here." : "Its analysis and content show up here."}
               </span>
             </div>
           ) : (
@@ -595,7 +663,7 @@ export function BatchesWorkspace() {
                   onBackToEmail={() => setDetailTab("email")}
                 />
               ) : displayedDetail.result === "needs_review" ? (
-                <ReviewView email={displayedDetail} onResolved={onResolved} />
+                <ReviewView key={displayedDetail.id} email={displayedDetail} onResolved={onResolved} />
               ) : displayedDetail.result === "mismatch" ||
                 displayedDetail.result === "no_mismatch" ? (
                 <ComparisonView email={displayedDetail} />

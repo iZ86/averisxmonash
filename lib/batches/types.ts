@@ -73,6 +73,8 @@ export type AttachmentRow = {
 /** What the UI actually renders: an email joined with its latest analysis (if any). */
 export type BatchEmail = {
   id: string;
+  /** The latest processed_emails row; null until the email has been analysed. */
+  processedId: string | null;
   subject: string;
   fromAddress: string;
   snippet: string | null;

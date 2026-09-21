@@ -1,11 +1,12 @@
 "use client";
 
-import { ArrowUpDown, ChevronLeft, ChevronRight, Clock3 } from "lucide-react";
+import { ArrowUpDown, ChevronLeft, ChevronRight, Clock3, Flag } from "lucide-react";
 import { CategoryChip, ResultBadge } from "@/components/ui";
 import { fmtShort } from "@/lib/batches/format";
 import { PAGE_SIZE, type Sort } from "@/lib/batches/queries";
 import type { BatchEmail } from "@/lib/batches/types";
 import { REVIEW_REASON_TEXT } from "@/lib/batches/map-labels";
+import { REVIEW_CASES, isReviewReason } from "@/lib/batches/review-cases";
 
 function reviewHint(email: BatchEmail) {
   return email.reviewReasonRaw
@@ -23,6 +24,8 @@ export function ListPanel({
   onSelect,
   onSortToggle,
   onPageChange,
+  noun = { one: "email", many: "emails" },
+  variant = "all",
 }: {
   rows: BatchEmail[];
   total: number;
@@ -33,6 +36,9 @@ export function ListPanel({
   onSelect: (id: string) => void;
   onSortToggle: () => void;
   onPageChange: (page: number) => void;
+  noun?: { one: string; many: string };
+  /** "review" is the Review Queue: rows show the review reason instead of the category and result. */
+  variant?: "all" | "review";
 }) {
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const from = (page - 1) * PAGE_SIZE;
@@ -41,7 +47,7 @@ export function ListPanel({
     <section className="card overflow-hidden" aria-label="Emails">
       <div className="flex items-center justify-between gap-2 px-4.5 py-3.5">
         <b className="font-semibold">
-          {total.toLocaleString("en-US")} {total === 1 ? "email" : "emails"}
+          {total.toLocaleString("en-US")} {total === 1 ? noun.one : noun.many}
         </b>
         <button
           type="button"
@@ -49,19 +55,20 @@ export function ListPanel({
           className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs text-text-muted hover:bg-surface-inset hover:text-text-strong"
         >
           <ArrowUpDown size={13} strokeWidth={1.75} aria-hidden />
-          {sort === "newest" ? "Newest first" : "Lowest confidence first"}
+          {sort === "newest" ? "Newest first" : sort === "oldest" ? "Oldest first" : "Lowest confidence first"}
         </button>
       </div>
 
       {!loading && rows.length === 0 ? (
         <div className="border-t border-border px-5.5 py-9 text-center text-text-muted">
-          <b className="mb-1 block text-text-strong">No emails match</b>
+          <b className="mb-1 block text-text-strong">No {noun.many} match</b>
           Try another filter or clear the search.
         </div>
       ) : (
         rows.map((e) => {
           const sel = e.id === selectedId;
-          const hint = reviewHint(e);
+          const isReviewRow = variant === "review";
+          const hint = isReviewRow ? null : reviewHint(e);
           return (
             <button
               key={e.id}
@@ -91,7 +98,12 @@ export function ListPanel({
                 {hint ?? e.snippet ?? ""}
               </span>
               <span className="flex flex-wrap items-center gap-2 pl-3.5 pt-1 text-xs">
-                {e.category ? (
+                {isReviewRow ? (
+                  <span className="badge rev">
+                    <Flag size={14} strokeWidth={1.75} aria-hidden />
+                    {isReviewReason(e.reviewReasonRaw) ? REVIEW_CASES[e.reviewReasonRaw].title : "Needs review"}
+                  </span>
+                ) : e.category ? (
                   <CategoryChip category={e.category} />
                 ) : e.result === "pending" ? (
                   <span className="badge queue">
@@ -101,7 +113,7 @@ export function ListPanel({
                 ) : (
                   <span className="text-text-muted">n/a</span>
                 )}
-                {e.result !== "pending" && <ResultBadge result={e.result} />}
+                {!isReviewRow && e.result !== "pending" && <ResultBadge result={e.result} />}
               </span>
             </button>
           );

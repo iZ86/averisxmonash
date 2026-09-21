@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Globe, Inbox, LayoutDashboard, Upload } from "lucide-react";
+import { Flag, Globe, Inbox, LayoutDashboard, Upload } from "lucide-react";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/batches", label: "Batches", icon: Inbox },
+  { href: "/review", label: "Review queue", icon: Flag },
   { href: "/shipments", label: "Shipments", icon: Globe },
   { href: "/upload", label: "Upload data", icon: Upload },
 ] as const;
@@ -51,7 +52,7 @@ export function SideNav({
               style={{ flex: "none" }}
             />
             <span className={`sidebar-collapsible ${hideLabel}`}>{label}</span>
-            {href === "/batches" && reviewCount > 0 && (
+            {href === "/review" && reviewCount > 0 && (
               <span
                 className={`sidebar-collapsible count ${hideLabel}`}
                 aria-label={`${reviewCount} open cases`}
