@@ -475,6 +475,10 @@ body {
   .nav a.on svg {
     color: var(--accent);
   }
+  .nav .count.muted {
+    background: var(--on-brand-muted);
+    color: var(--brand-surface);
+  }
   .nav .count.info {
     background: var(--info);
     color: var(--on-info);

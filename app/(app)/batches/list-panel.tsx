@@ -42,7 +42,7 @@ export function ListPanel({
   onPageChange: (page: number) => void;
   noun?: { one: string; many: string };
   /** "review" is the Review Queue: rows show the review reason instead of the category and result. */
-  variant?: "all" | "review" | "mismatch" | "instruction";
+  variant?: "all" | "review" | "mismatch" | "instruction" | "invoice";
   /** Which rows have already had a reply emailed to their sender (shown as an "Email sent" badge). */
   sentIds?: Set<string>;
   /** Mismatches only: checkboxes for bulk emailing, and which rows have already been emailed. */
@@ -107,7 +107,8 @@ export function ListPanel({
           const isReviewRow = variant === "review" && inFilter;
           const isMismatchRow = variant === "mismatch" && inFilter;
           const isInstructionRow = variant === "instruction" && inFilter;
-          const hint = isReviewRow || isMismatchRow || isInstructionRow ? null : reviewHint(e);
+          const isInvoiceRow = variant === "invoice" && inFilter;
+          const hint = isReviewRow || isMismatchRow || isInstructionRow || isInvoiceRow ? null : reviewHint(e);
           const isSent = !!e.processedId && !!(sentIds ?? selection?.sent)?.has(e.processedId);
           const row = (
             <button
@@ -162,7 +163,17 @@ export function ListPanel({
               </span>
               {/* Our own outgoing replies are not classified for the reader: no badges, just the message. */}
               <span className={`${ours ? "hidden" : "flex"} flex-wrap items-center gap-1.5 pl-3.5 ${reply ? "pt-0.5" : "pt-1"} text-xs [&_.badge]:gap-1 [&_.badge]:px-2 [&_.badge]:whitespace-nowrap [&_.chip]:gap-1 [&_.chip]:px-2 [&_.chip]:whitespace-nowrap`}>
-                {isInstructionRow ? (
+                {isInvoiceRow ? (
+                  <>
+                    <CategoryChip category="invoice_query" />
+                    {isSent && (
+                      <span className="badge ok">
+                        <Mail size={14} strokeWidth={1.75} aria-hidden />
+                        Email sent
+                      </span>
+                    )}
+                  </>
+                ) : isInstructionRow ? (
                   <>
                     <span className="badge info">
                       <FileText size={14} strokeWidth={1.75} aria-hidden />
@@ -213,7 +224,24 @@ export function ListPanel({
                 ) : (
                   <span className="text-text-muted">n/a</span>
                 )}
-                {!isReviewRow && !isMismatchRow && !isInstructionRow && e.result !== "pending" && <ResultBadge result={e.result} />}
+                {!isReviewRow && !isMismatchRow && !isInstructionRow && !isInvoiceRow && e.result !== "pending" &&
+                  (e.category === "new_si_request" || e.category === "invoice_query" ? (
+                    // These are never compared, so "Not compared" says nothing: show whether the sender was replied to.
+                    isSent && (
+                      <span className="badge ok">
+                        <Mail size={14} strokeWidth={1.75} aria-hidden />
+                        Email sent
+                      </span>
+                    )
+                  ) : e.result === "needs_review" && isSent ? (
+                    // The sender has been replied to, so that outcome takes precedence over "Needs review".
+                    <span className="badge ok">
+                      <Mail size={14} strokeWidth={1.75} aria-hidden />
+                      Email sent
+                    </span>
+                  ) : (
+                    <ResultBadge result={e.result} />
+                  ))}
               </span>
             </button>
           );

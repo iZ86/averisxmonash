@@ -51,12 +51,14 @@ export function SidebarShell({
   reviewCount,
   mismatchCount,
   instructionCount,
+  invoiceCount,
   userName,
   children,
 }: {
   reviewCount: number;
   mismatchCount: number;
   instructionCount: number;
+  invoiceCount: number;
   userName: string;
   children: React.ReactNode;
 }) {
@@ -169,6 +171,7 @@ export function SidebarShell({
           reviewCount={reviewCount}
           mismatchCount={mismatchCount}
           instructionCount={instructionCount}
+          invoiceCount={invoiceCount}
           collapsed={desktopCollapsed}
           onNavigate={() => setMobileOpen(false)}
         />

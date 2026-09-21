@@ -1,6 +1,5 @@
 import "client-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { AUTO_ACCEPT_THRESHOLD } from "@/lib/confidence";
 import { SYNC_LOCK_STALE_MS } from "./constants";
 import { REVIEW_FIELDS, isReviewReason, type ReviewField, type ReviewReasonCode } from "./review-cases";
 import type { BatchEmail, BatchEmailViewRow, AttachmentRow } from "./types";
@@ -11,15 +10,15 @@ export const PAGE_SIZE = 8;
 /** Review queue / Mismatches filter: cases whose sender has been emailed, or that are still waiting. */
 export type SentFilter = "pending" | "emailed";
 
-export type Tab = "all" | "comparison" | "si_request" | "review" | "low" | "failed" | "mismatch";
+export type Tab = "all" | "comparison" | "si_request" | "invoice_query" | "review" | "failed" | "mismatch";
 export type Sort = "newest" | "lowest" | "oldest";
 
 export const TABS: { key: Tab; label: string; }[] = [
   { key: "all", label: "All" },
   { key: "comparison", label: "Comparison" },
   { key: "si_request", label: "SI request" },
+  { key: "invoice_query", label: "Invoice query" },
   { key: "review", label: "Needs review" },
-  { key: "low", label: "Low confidence" },
   { key: "failed", label: "Failed" },
 ];
 
@@ -103,14 +102,12 @@ export async function listBatchEmails(
     query = query.eq("result", "mismatch");
     if (opts.field) query = query.contains("defect_fields", [opts.field]);
   }
-  // "Below threshold" must include every email sent to review, even one with
-  // no score at all (a plain `.lt` excludes nulls and would under-count).
-  else if (opts.tab === "low") query = query.or(`overall_confidence.lt.${AUTO_ACCEPT_THRESHOLD},result.eq.needs_review`);
+  else if (opts.tab === "invoice_query") query = query.eq("category", "invoice_query");
   else if (opts.tab === "failed") query = query.eq("result", "failed");
 
   // Emailed vs pending lives on processed_emails.email_sent, which the view doesn't expose,
   // so look up the emailed ids first and filter the list by them.
-  if (opts.sent && (opts.tab === "review" || opts.tab === "mismatch" || opts.tab === "si_request")) {
+  if (opts.sent && (opts.tab === "review" || opts.tab === "mismatch" || opts.tab === "si_request" || opts.tab === "invoice_query")) {
     const { data: sentRows, error: sentError } = await supabase
       .from("processed_emails")
       .select("id")
@@ -206,15 +203,20 @@ export type BatchStats = {
   failed: number;
   comparison: number;
   siRequest: number;
+  invoiceQuery: number;
 };
 
 export async function getBatchStats(supabase: SupabaseClient): Promise<BatchStats> {
-  const [{ data, error }, { count: siRequest, error: siError }] = await Promise.all([
+  const countCategory = (category: string) =>
+    supabase.from("batch_emails").select("id", { count: "exact", head: true }).eq("category", category);
+  const [{ data, error }, { count: siRequest, error: siError }, { count: invoiceQuery, error: invoiceError }] = await Promise.all([
     supabase.rpc("batch_email_stats").single(),
-    supabase.from("batch_emails").select("id", { count: "exact", head: true }).eq("category", "new_si_request"),
+    countCategory("new_si_request"),
+    countCategory("invoice_query"),
   ]);
   if (error) throw error;
   if (siError) throw siError;
+  if (invoiceError) throw invoiceError;
   const row = data as {
     total: number;
     avg_confidence: number | null;
@@ -231,6 +233,7 @@ export async function getBatchStats(supabase: SupabaseClient): Promise<BatchStat
     failed: row.failed,
     comparison: row.comparison,
     siRequest: siRequest ?? 0,
+    invoiceQuery: invoiceQuery ?? 0,
   };
 }
 
