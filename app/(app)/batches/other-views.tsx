@@ -1,11 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import { File, RefreshCw, XCircle } from "lucide-react";
 import { CategoryChip, Confidence } from "@/components/ui";
 
 const ICON = { size: 14, strokeWidth: 1.75, "aria-hidden": true } as const;
 
 import type { BatchEmail } from "@/lib/batches/types";
+import { FileDialog } from "./file-viewer";
 
 /** No processed_emails row yet — synced but never analysed. */
 export function PendingView() {
@@ -61,7 +63,8 @@ export function FailedView({ email, onRetry, retrying }: { email: BatchEmail; on
   );
 }
 
-export function EmailView({ email, onOpenAttachment }: { email: BatchEmail; onOpenAttachment: (id: string) => void }) {
+export function EmailView({ email }: { email: BatchEmail }) {
+  const [openId, setOpenId] = useState<string | null>(null);
   return (
     <article className="card flex flex-col gap-5 p-6">
       <div className="flex items-center gap-3">
@@ -83,8 +86,8 @@ export function EmailView({ email, onOpenAttachment }: { email: BatchEmail; onOp
                 type="button"
                 className="chip cursor-pointer underline-offset-2 hover:underline"
                 key={a.id}
-                title="Open in the Attachments tab"
-                onClick={() => onOpenAttachment(a.id)}
+                title="View file"
+                onClick={() => setOpenId(a.id)}
               >
                 <File {...ICON} /> {a.filename}
               </button>
@@ -92,6 +95,7 @@ export function EmailView({ email, onOpenAttachment }: { email: BatchEmail; onOp
           </div>
         </div>
       )}
+      {openId && <FileDialog attachments={email.attachments} initialId={openId} title="Attachments" onClose={() => setOpenId(null)} />}
       <p className="cap">Stored from Gmail. Opening this page reads the stored copy, not Gmail.</p>
     </article>
   );

@@ -8,13 +8,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const meta = (data?.claims?.user_metadata ?? {}) as { full_name?: string; name?: string };
   const name = meta.full_name ?? meta.name ?? data?.claims?.email ?? "Signed in";
 
-  const { count } = await supabase
-    .from("batch_emails")
-    .select("id", { count: "exact", head: true })
-    .eq("result", "needs_review");
+  // Sidebar badges count only cases nobody has handled yet: still open, and no reply sent to the sender.
+  const openCases = (status: "NEEDS_REVIEW" | "MISMATCH") =>
+    supabase
+      .from("processed_emails")
+      .select("id", { count: "exact", head: true })
+      .eq("status", status)
+      .or("email_sent.is.null,email_sent.eq.false");
+  const [{ count }, { count: mismatchCount }] = await Promise.all([openCases("NEEDS_REVIEW"), openCases("MISMATCH")]);
 
   return (
-    <SidebarShell reviewCount={count ?? 0} userName={String(name)}>
+    <SidebarShell reviewCount={count ?? 0} mismatchCount={mismatchCount ?? 0} userName={String(name)}>
       {children}
     </SidebarShell>
   );

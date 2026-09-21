@@ -5,7 +5,11 @@ import { parseMessage } from "@/lib/google/gmail";
 import { toClassifierAttachment } from "./extract-text";
 import { attachmentPath, uploadAttachment } from "./attachment-storage";
 import { processEmail } from "./index";
-import { billOfLadingRow, shippingInstructionRow } from "./extracted-documents";
+import {
+  billOfLadingRow,
+  shippingInstructionRequestRow,
+  shippingInstructionRow,
+} from "./extracted-documents";
 
 type SyncedEmail = {
   id: string;
@@ -94,7 +98,7 @@ export async function processSyncedEmail(
   if (error) throw new Error(`Saving analysis: ${error.message}`);
 
   // Upsert, not insert, so re-running a failed job doesn't duplicate the rows.
-  // A failure here throws like the two writes above: process-queue marks the
+  // A failure in any of the three throws like the writes above: process-queue marks the
   // job failed. Its own FAILED row then conflicts with the analysis row
   // already written and no-ops, so the queue — not processed_emails.status —
   // is what records that this job didn't finish.
@@ -118,5 +122,18 @@ export async function processSyncedEmail(
         { onConflict: "processed_email_id" },
       );
     if (blError) throw new Error(`Saving bill of lading: ${blError.message}`);
+  }
+
+  const siRequestRow = shippingInstructionRequestRow(result);
+  if (siRequestRow) {
+    const { error: siRequestError } = await supabase
+      .from("shipping_instructions_request_details")
+      .upsert(
+        { processed_email_id: processed.id, ...siRequestRow },
+        { onConflict: "processed_email_id" },
+      );
+    if (siRequestError) {
+      throw new Error(`Saving shipping instruction request: ${siRequestError.message}`);
+    }
   }
 }

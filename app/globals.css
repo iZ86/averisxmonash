@@ -461,6 +461,10 @@ body {
   .nav a.on svg {
     color: var(--accent);
   }
+  .nav .count.bad {
+    background: var(--status-mismatch);
+    color: var(--on-action);
+  }
   .nav .count {
     margin-left: auto;
     min-width: 22px;

@@ -45,10 +45,6 @@ export const REVIEW_CASES: Record<ReviewReasonCode, ReviewCase> = {
   wrong_doc_type: {
     title: "Wrong document type",
     problem: "The document attached as the BL is a commercial invoice, not a bill of lading.",
-    accept: {
-      label: "Accept and confirm the details",
-      hint: "Use this document anyway: check all 7 fields against it and confirm them.",
-    },
     reject: {
       action: "request_correct_document",
       label: "Reject and request the correct document type",

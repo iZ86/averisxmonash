@@ -90,6 +90,25 @@ CREATE TABLE public.shipping_instructions (
   CONSTRAINT shipping_instructions_pkey PRIMARY KEY (id),
   CONSTRAINT shipping_instructions_processed_email_id_fkey FOREIGN KEY (processed_email_id) REFERENCES public.processed_emails(id)
 );
+-- The UNIQUE on processed_email_id is load-bearing, not decoration: the three
+-- document tables are written with upsert(..., { onConflict: "processed_email_id" }),
+-- and ON CONFLICT needs a unique index on its target or Postgres raises 42P10.
+CREATE TABLE public.shipping_instructions_request_details (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  processed_email_id uuid NOT NULL,
+  shipper text,
+  consignee text,
+  notify_party text,
+  port_of_loading text,
+  port_of_discharge text,
+  container_count text,
+  gross_weight_kg text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  bl_filename text,
+  CONSTRAINT shipping_instructions_request_details_pkey PRIMARY KEY (id),
+  CONSTRAINT shipping_instructions_request_details_processed_email_id_key UNIQUE (processed_email_id),
+  CONSTRAINT shipping_instructions_request_details_processed_email_id_fkey FOREIGN KEY (processed_email_id) REFERENCES public.processed_emails(id) ON DELETE CASCADE
+);
 CREATE TABLE public.review_resolutions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   processed_email_id uuid NOT NULL UNIQUE,

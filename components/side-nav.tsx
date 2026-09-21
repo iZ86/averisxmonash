@@ -15,10 +15,12 @@ const NAV = [
 
 export function SideNav({
   reviewCount,
+  mismatchCount,
   collapsed = false,
   onNavigate,
 }: {
   reviewCount: number;
+  mismatchCount: number;
   /** True when the desktop rail is collapsed to icons. Labels stay in the DOM
    * (so the mobile drawer, which is unaffected by this flag, always shows
    * them) and are hidden with `md:hidden` only in that state. */
@@ -49,8 +51,13 @@ export function SideNav({
             <Icon size={18} strokeWidth={1.75} aria-hidden style={{ flex: "none" }} />
             <span className={`sidebar-collapsible ${hideLabel}`}>{label}</span>
             {href === "/review" && reviewCount > 0 && (
-              <span className={`sidebar-collapsible count ${hideLabel}`} aria-label={`${reviewCount} open cases`}>
+              <span className={`sidebar-collapsible count ${hideLabel}`} aria-label={`${reviewCount} cases to review`}>
                 {reviewCount}
+              </span>
+            )}
+            {href === "/mismatches" && mismatchCount > 0 && (
+              <span className={`sidebar-collapsible count bad ${hideLabel}`} aria-label={`${mismatchCount} mismatches not yet emailed`}>
+                {mismatchCount}
               </span>
             )}
           </Link>
