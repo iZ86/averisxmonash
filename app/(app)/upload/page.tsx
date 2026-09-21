@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/ui";
 import { UploadForm } from "./upload-form";
 
 export const metadata: Metadata = {
-  title: "Upload shipping data · Averis x Monash",
+  title: "Upload shipping data · APRIL Group",
   description: "Upload an inbox + attachments bundle for shipping document verification.",
 };
 

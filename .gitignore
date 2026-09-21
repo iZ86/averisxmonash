@@ -46,3 +46,7 @@ next-env.d.ts
 
 # graphify
 graphify-out
+
+# State and Score, used to evaluate system internally
+STATE.md
+SCORE.md

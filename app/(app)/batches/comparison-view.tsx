@@ -5,7 +5,7 @@ import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { Confidence, ResultBadge } from "@/components/ui";
 import { AUTO_ACCEPT_THRESHOLD } from "@/lib/confidence";
-import { FIELD_LABEL } from "@/lib/mock/data";
+import { FIELD_LABEL } from "@/lib/labels";
 import { orderedFields, mismatchSummary, matchSummary } from "@/lib/batches/comparison-report";
 import { diffField, displayValue, type DiffSegment } from "@/lib/batches/word-diff";
 import type { BatchEmail } from "@/lib/batches/types";

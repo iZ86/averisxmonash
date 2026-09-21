@@ -2,12 +2,14 @@ import "client-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { AUTO_ACCEPT_THRESHOLD } from "@/lib/confidence";
 import { SYNC_LOCK_STALE_MS } from "./constants";
+import { REVIEW_FIELDS, isReviewReason, type ReviewField, type ReviewReasonCode } from "./review-cases";
 import type { BatchEmail, BatchEmailViewRow, AttachmentRow } from "./types";
+import type { Field, FieldComparison } from "@/lib/types";
 
 export const PAGE_SIZE = 8;
 
-export type Tab = "all" | "comparison" | "review" | "low" | "failed";
-export type Sort = "newest" | "lowest";
+export type Tab = "all" | "comparison" | "review" | "low" | "failed" | "mismatch";
+export type Sort = "newest" | "lowest" | "oldest";
 
 export const TABS: { key: Tab; label: string; }[] = [
   { key: "all", label: "All" },
@@ -21,9 +23,40 @@ function escapeLike(value: string) {
   return value.replace(/[%_]/g, (c) => `\\${c}`);
 }
 
+/** A row from `public.shipping_instructions` or `public.bill_of_lading`: the 7
+ * compared fields as transcribed off that document, keyed by `processed_email_id`. */
+type DocumentValuesRow = Record<Field, string | null>;
+const DOCUMENT_VALUE_COLUMNS = REVIEW_FIELDS.join(", ");
+
+/** Builds the field table's rows from the two documents' transcribed values and
+ * the classifier's own defect_fields list — `match` is never recomputed here,
+ * only read off what the classifier already decided. */
+function buildFieldComparisons(
+  defectFields: Field[],
+  si: DocumentValuesRow | null,
+  bl: DocumentValuesRow | null,
+): FieldComparison[] {
+  const defects = new Set<Field>(defectFields);
+  return REVIEW_FIELDS.map((field) => ({
+    field,
+    si: si?.[field] ?? null,
+    bl: bl?.[field] ?? null,
+    match: !defects.has(field),
+    confidence: null,
+  }));
+}
+
+function mapAttachments(attachments: AttachmentRow[]): BatchEmail["attachments"] {
+  return attachments
+    .slice()
+    .sort((a, b) => a.position - b.position)
+    .map((a) => ({ id: a.id, filename: a.filename, mimeType: a.mime_type, sizeBytes: a.size_bytes }));
+}
+
 function fromViewRow(row: BatchEmailViewRow, attachments: AttachmentRow[] = [], body: string | null = null): BatchEmail {
   return {
     id: row.id,
+    processedId: row.processed_id,
     subject: row.subject,
     fromAddress: row.from_address,
     snippet: row.snippet,
@@ -39,16 +72,13 @@ function fromViewRow(row: BatchEmailViewRow, attachments: AttachmentRow[] = [], 
     reviewReasonRaw: row.review_reason,
     reasoning: row.reasoning,
     error: row.status === "FAILED" ? row.reasoning : null,
-    attachments: attachments
-      .slice()
-      .sort((a, b) => a.position - b.position)
-      .map((a) => ({ id: a.id, filename: a.filename, mimeType: a.mime_type, sizeBytes: a.size_bytes })),
+    attachments: mapAttachments(attachments),
   };
 }
 
 export async function listBatchEmails(
   supabase: SupabaseClient,
-  opts: { tab: Tab; search: string; sort: Sort; page: number; },
+  opts: { tab: Tab; search: string; sort: Sort; page: number; reason?: ReviewReasonCode | null; field?: ReviewField | null; },
 ): Promise<{ rows: BatchEmail[]; total: number; }> {
   const from = (opts.page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
@@ -56,12 +86,18 @@ export async function listBatchEmails(
   let query = supabase
     .from("batch_emails")
     .select(
-      "id, subject, from_address, snippet, received_at, logged_at, is_unread, status, review_reason, defect_fields, reasoning, result, overall_confidence, classification_confidence, category",
+      "id, subject, from_address, snippet, received_at, logged_at, is_unread, processed_id, status, review_reason, defect_fields, reasoning, result, overall_confidence, classification_confidence, category",
       { count: "exact" },
     );
 
   if (opts.tab === "comparison") query = query.eq("category", "document_comparison");
-  else if (opts.tab === "review") query = query.eq("result", "needs_review");
+  else if (opts.tab === "review") {
+    query = query.eq("result", "needs_review");
+    if (opts.reason) query = query.eq("review_reason", opts.reason);
+  } else if (opts.tab === "mismatch") {
+    query = query.eq("result", "mismatch");
+    if (opts.field) query = query.contains("defect_fields", [opts.field]);
+  }
   // "Below threshold" must include every email sent to review, even one with
   // no score at all (a plain `.lt` excludes nulls and would under-count).
   else if (opts.tab === "low") query = query.or(`overall_confidence.lt.${AUTO_ACCEPT_THRESHOLD},result.eq.needs_review`);
@@ -75,6 +111,8 @@ export async function listBatchEmails(
 
   if (opts.sort === "lowest") {
     query = query.order("overall_confidence", { ascending: true, nullsFirst: false }).order("received_at", { ascending: false });
+  } else if (opts.sort === "oldest") {
+    query = query.order("received_at", { ascending: true });
   } else {
     query = query.order("received_at", { ascending: false });
   }
@@ -118,12 +156,70 @@ export async function getBatchStats(supabase: SupabaseClient): Promise<BatchStat
   };
 }
 
+export type ReviewStats = {
+  total: number;
+  /** How many of the open cases have already had a reply sent to their sender. */
+  notified: number;
+  byReason: Record<ReviewReasonCode, number>;
+};
+
+/** Counts for the Review queue page, computed from `processed_emails` directly
+ * (the same table the reject/accept API routes read and write). */
+export async function getReviewStats(supabase: SupabaseClient): Promise<ReviewStats> {
+  const { data, error } = await supabase.from("processed_emails").select("review_reason, email_sent").eq("status", "NEEDS_REVIEW");
+  if (error) throw error;
+  const rows = (data ?? []) as { review_reason: string | null; email_sent: boolean }[];
+
+  let notified = 0;
+  const byReason: Partial<Record<ReviewReasonCode, number>> = {};
+  for (const row of rows) {
+    if (row.email_sent) notified++;
+    if (isReviewReason(row.review_reason)) byReason[row.review_reason] = (byReason[row.review_reason] ?? 0) + 1;
+  }
+  return { total: rows.length, notified, byReason: byReason as Record<ReviewReasonCode, number> };
+}
+
+export type MismatchStats = {
+  total: number;
+  /** How many of the mismatches have already had their sender emailed. */
+  notified: number;
+  byField: Record<ReviewField, number>;
+};
+
+/** Counts for the Mismatches page, computed from `processed_emails` directly
+ * (the same table /api/mismatches/email reads and writes). */
+export async function getMismatchStats(supabase: SupabaseClient): Promise<MismatchStats> {
+  const { data, error } = await supabase.from("processed_emails").select("defect_fields, email_sent").eq("status", "MISMATCH");
+  if (error) throw error;
+  const rows = (data ?? []) as { defect_fields: string[] | null; email_sent: boolean }[];
+
+  let notified = 0;
+  const byField: Partial<Record<ReviewField, number>> = {};
+  const fieldSet = new Set<string>(REVIEW_FIELDS);
+  for (const row of rows) {
+    if (row.email_sent) notified++;
+    for (const f of row.defect_fields ?? []) {
+      if (fieldSet.has(f)) byField[f as ReviewField] = (byField[f as ReviewField] ?? 0) + 1;
+    }
+  }
+  return { total: rows.length, notified, byField: byField as Record<ReviewField, number> };
+}
+
+/** Which of the given `processed_emails` ids have already had a reply sent
+ * (the same `email_sent` flag /api/mismatches/email and /api/reviews claim). */
+export async function getEmailSentIds(supabase: SupabaseClient, processedEmailIds: string[]): Promise<Set<string>> {
+  if (processedEmailIds.length === 0) return new Set();
+  const { data, error } = await supabase.from("processed_emails").select("id, email_sent").in("id", processedEmailIds);
+  if (error) throw error;
+  return new Set(((data ?? []) as { id: string; email_sent: boolean }[]).filter((r) => r.email_sent).map((r) => r.id));
+}
+
 export async function getBatchEmailDetail(supabase: SupabaseClient, id: string): Promise<BatchEmail | null> {
   const [{ data: viewRow, error: viewError }, { data: attachments, error: attError }] = await Promise.all([
     supabase
       .from("batch_emails")
       .select(
-        "id, subject, from_address, snippet, received_at, logged_at, is_unread, status, review_reason, defect_fields, reasoning, result, overall_confidence, classification_confidence, category",
+        "id, subject, from_address, snippet, received_at, logged_at, is_unread, processed_id, status, review_reason, defect_fields, reasoning, result, overall_confidence, classification_confidence, category",
       )
       .eq("id", id)
       .maybeSingle(),
@@ -135,7 +231,22 @@ export async function getBatchEmailDetail(supabase: SupabaseClient, id: string):
   if (attError) throw attError;
   if (!viewRow) return null;
 
-  return fromViewRow(viewRow as unknown as BatchEmailViewRow, (attachments ?? []) as AttachmentRow[]);
+  const row = viewRow as unknown as BatchEmailViewRow;
+  const email = fromViewRow(row, (attachments ?? []) as AttachmentRow[]);
+
+  // The field table only applies once there's something to compare — fetch the
+  // two documents' transcribed values just for that case, not on every email.
+  if (row.processed_id && (row.result === "mismatch" || row.result === "no_mismatch")) {
+    const [{ data: siRow, error: siError }, { data: blRow, error: blError }] = await Promise.all([
+      supabase.from("shipping_instructions").select(DOCUMENT_VALUE_COLUMNS).eq("processed_email_id", row.processed_id).maybeSingle(),
+      supabase.from("bill_of_lading").select(DOCUMENT_VALUE_COLUMNS).eq("processed_email_id", row.processed_id).maybeSingle(),
+    ]);
+    if (siError) throw siError;
+    if (blError) throw blError;
+    email.fields = buildFieldComparisons(email.defectFields, siRow as DocumentValuesRow | null, blRow as DocumentValuesRow | null);
+  }
+
+  return email;
 }
 
 export async function getBatchEmailContent(
@@ -155,10 +266,7 @@ export async function getBatchEmailContent(
 
   return {
     body: (emailRow?.body as string | null) ?? null,
-    attachments: ((attachments ?? []) as AttachmentRow[])
-      .slice()
-      .sort((a, b) => a.position - b.position)
-      .map((a) => ({ id: a.id, filename: a.filename, mimeType: a.mime_type, sizeBytes: a.size_bytes })),
+    attachments: mapAttachments((attachments ?? []) as AttachmentRow[]),
   };
 }
 

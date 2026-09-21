@@ -1,6 +1,6 @@
 // Pure helpers behind the comparison report (banner text, row ordering). Split
 // out from comparison-view.tsx so the logic is testable without rendering React.
-import { FIELD_LABEL } from "@/lib/mock/data";
+import { FIELD_LABEL } from "@/lib/labels";
 import type { FieldComparison } from "@/lib/types";
 import { displayValue } from "./word-diff";
 

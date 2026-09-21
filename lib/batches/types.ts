@@ -73,6 +73,8 @@ export type AttachmentRow = {
 /** What the UI actually renders: an email joined with its latest analysis (if any). */
 export type BatchEmail = {
   id: string;
+  /** The latest processed_emails row; null until the email has been analysed. */
+  processedId: string | null;
   subject: string;
   fromAddress: string;
   snippet: string | null;
@@ -101,12 +103,13 @@ export type BatchEmail = {
 
   attachments: { id: string; filename: string; mimeType: string | null; sizeBytes: number | null }[];
 
-  /** Per-field SI/BL values + confidence. Not populated by the current
-   * classification pipeline (v1 ships without them) — always empty today, kept
-   * so the moved comparison-report/review components keep working unchanged if
-   * this is extended later. */
+  /** Per-field SI/BL values, joined in from `shipping_instructions` and
+   * `bill_of_lading` by `getBatchEmailDetail`. Only set for mismatch/no_mismatch
+   * results — there's nothing to compare otherwise. No per-field confidence:
+   * the classifier only ever scored the email as a whole. */
   fields?: FieldComparison[];
-  /** Highlighted source-document evidence. Same story as `fields`: never
-   * populated today, kept for forward-compatibility with the moved components. */
+  /** Highlighted source-document evidence. Not populated by the current
+   * classification pipeline (no highlighted-excerpt data is stored) — kept for
+   * forward-compatibility with the moved components. */
   evidence?: { si: string[]; bl: string[]; flagged?: Field };
 };

@@ -2,8 +2,9 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { classifyEmail } from "@/lib/email-classification/classify";
+import type { ExtractedDocumentValues } from "@/lib/email-classification/schemas";
 import { errorMessage } from "@/lib/errors";
-import { shippingInstructionRow } from "@/lib/email-processing/shipping-instruction";
+import { billOfLadingRow, shippingInstructionRow } from "@/lib/email-processing/extracted-documents";
 
 export const runtime = "nodejs";
 
@@ -77,23 +78,25 @@ export async function POST(request: Request) {
       .single();
     if (error) throw error;
 
-    // Unlike the sync path, a retry can also need to *clear* the row: a
-    // re-classification that turns MISMATCH into OK-with-no-SI would otherwise
-    // leave the old values behind. `on delete cascade` doesn't help — the
-    // parent is upserted, not deleted.
-    const siRow = shippingInstructionRow(result);
-    const { error: siError } = siRow
-      ? await supabase
-          .from("shipping_instructions")
-          .upsert(
-            { processed_email_id: processed.id, ...siRow },
-            { onConflict: "processed_email_id" },
-          )
-      : await supabase
-          .from("shipping_instructions")
-          .delete()
-          .eq("processed_email_id", processed.id);
+    // Unlike the sync path, a retry can also need to *clear* a row: a
+    // re-classification that turns MISMATCH into OK-with-nothing-attached would
+    // otherwise leave the old values behind. `on delete cascade` doesn't help —
+    // the parent is upserted, not deleted.
+    const siError = await writeDocumentRow(
+      supabase,
+      "shipping_instructions",
+      processed.id,
+      shippingInstructionRow(result),
+    );
     if (siError) throw siError;
+
+    const blError = await writeDocumentRow(
+      supabase,
+      "bill_of_lading",
+      processed.id,
+      billOfLadingRow(result),
+    );
+    if (blError) throw blError;
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -114,4 +117,19 @@ export async function POST(request: Request) {
     );
     return NextResponse.json({ success: false, error: message }, { status: 502 });
   }
+}
+
+/** Upserts the extracted row, or clears it when this classification wants none. */
+async function writeDocumentRow(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  table: "shipping_instructions" | "bill_of_lading",
+  processedEmailId: string,
+  row: ExtractedDocumentValues | null,
+) {
+  const { error } = row
+    ? await supabase
+        .from(table)
+        .upsert({ processed_email_id: processedEmailId, ...row }, { onConflict: "processed_email_id" })
+    : await supabase.from(table).delete().eq("processed_email_id", processedEmailId);
+  return error;
 }
