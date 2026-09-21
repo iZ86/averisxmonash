@@ -1,4 +1,4 @@
-# Design handoff: Averis x Monash
+# Design handoff: APRIL Group
 
 Read this before building any screen. It tells you where the design lives, what each page must do, and how to wire it into this Next.js app (see also `AGENTS.md`: this Next.js version has breaking changes, so read `node_modules/next/dist/docs/` before writing code).
 

@@ -14,6 +14,6 @@ export function mismatchEmail(input: { from: string; subject: string; fields: st
       "Our document comparison has found a discrepancy between your Shipping Instruction and the draft Bill of Lading." +
       `${list}\n\n` +
       "Please review the documents and reply with a corrected draft Bill of Lading, or confirm the instructions so we can proceed.\n\n" +
-      "Thank you,\nAveris x Monash",
+      "Thank you,\nAPRIL Group",
   };
 }

@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { BatchesWorkspace } from "../batches/workspace";
 
 export const metadata: Metadata = {
-  title: "Review queue · Averis x Monash",
+  title: "Review queue · APRIL Group",
   description: "Cases the system could not decide, waiting for a person.",
 };
 

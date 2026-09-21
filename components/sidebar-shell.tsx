@@ -99,7 +99,7 @@ export function SidebarShell({
       <div className="flex items-center justify-between border-b border-border bg-surface-card px-4 py-3 md:hidden">
         <div className="brand">
           <i />
-          <span>Averis x Monash</span>
+          <span>APRIL Group</span>
         </div>
         <button
           type="button"
@@ -132,7 +132,7 @@ export function SidebarShell({
           >
             <i />
             <span className={`sidebar-collapsible ${hideWhenCollapsed}`}>
-              Averis x Monash
+              APRIL Group
             </span>
           </div>
           <button

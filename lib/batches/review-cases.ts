@@ -118,6 +118,6 @@ export function replyContent(input: { from: string; subject: string; reason: Rev
 Thank you for your email. ${ask}
 
 Thank you,
-Averis x Monash`,
+APRIL Group`,
   };
 }

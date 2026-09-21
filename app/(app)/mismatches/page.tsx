@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { BatchesWorkspace } from "../batches/workspace";
 
 export const metadata: Metadata = {
-  title: "Mismatches · Averis x Monash",
+  title: "Mismatches · APRIL Group",
   description: "Emails where the Shipping Instruction and the draft BL differ.",
 };
 
