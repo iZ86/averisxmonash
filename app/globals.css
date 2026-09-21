@@ -394,6 +394,20 @@ body {
     padding: 14px 16px;
     border-top: 1px solid var(--border);
     vertical-align: middle;
+    overflow-wrap: anywhere;
+  }
+  /* Word/whole-value highlight in the SI vs BL comparison table. Never the only
+     cue that a value differs (the row itself is also tinted): background +
+     bold + underline together, so it still reads in a screen reader (<mark> is
+     announced as highlighted) and under color-blindness. */
+  mark.diff-mark {
+    background: color-mix(in srgb, var(--status-mismatch) 24%, transparent);
+    color: inherit;
+    border: 0;
+    border-bottom: 2px solid var(--status-mismatch);
+    border-radius: 3px;
+    padding: 0 3px;
+    font-weight: 700;
   }
   .side {
     background: var(--brand-surface);

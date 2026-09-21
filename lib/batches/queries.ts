@@ -62,7 +62,9 @@ export async function listBatchEmails(
 
   if (opts.tab === "comparison") query = query.eq("category", "document_comparison");
   else if (opts.tab === "review") query = query.eq("result", "needs_review");
-  else if (opts.tab === "low") query = query.lt("overall_confidence", AUTO_ACCEPT_THRESHOLD);
+  // "Below threshold" must include every email sent to review, even one with
+  // no score at all (a plain `.lt` excludes nulls and would under-count).
+  else if (opts.tab === "low") query = query.or(`overall_confidence.lt.${AUTO_ACCEPT_THRESHOLD},result.eq.needs_review`);
   else if (opts.tab === "failed") query = query.eq("result", "failed");
 
   const q = opts.search.trim();
