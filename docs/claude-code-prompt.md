@@ -3,7 +3,7 @@
 Paste the block below into Claude Code, run from the repo root.
 
 ```
-Build the Averis x Monash shipping-document-verification UI in this Next.js app so it looks the same as the wireframes.
+Build the APRIL Group shipping-document-verification UI in this Next.js app so it looks the same as the wireframes.
 
 Read first, in this order:
 1. AGENTS.md and CLAUDE.md (this Next.js version has breaking changes; check node_modules/next/dist/docs/ before writing code).

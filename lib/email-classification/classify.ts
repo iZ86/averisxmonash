@@ -10,7 +10,7 @@ import {
   type Classification,
   type ClassificationResponse,
   type ClassifierInput,
-  type ShippingInstructionValues,
+  type ExtractedDocumentValues,
 } from "./schemas";
 
 // Retries when the model returns a missing or invalid tool call.
@@ -126,17 +126,17 @@ function stripNulls(value: unknown): unknown {
   return value;
 }
 
-function toShippingInstruction(
+function toDocumentValues(
   isBlComparison: boolean,
-  si: Classification["shipping_instruction"],
-): ShippingInstructionValues | null {
-  if (!isBlComparison || !si) return null;
+  values: Classification["shipping_instruction"],
+): ExtractedDocumentValues | null {
+  if (!isBlComparison || !values) return null;
   return Object.fromEntries(
     // `stripNulls` has already turned every null the model sent into an absent
     // key, so read each field back through a default rather than trusting it
     // to be present.
-    COMPARED_FIELDS.map((field) => [field, blankToNull(si[field])]),
-  ) as ShippingInstructionValues;
+    COMPARED_FIELDS.map((field) => [field, blankToNull(values[field])]),
+  ) as ExtractedDocumentValues;
 }
 
 // A label the model echoed with nothing after it shouldn't reach the DB as "".
@@ -159,19 +159,18 @@ function toResponse(emailId: string, classification: Classification): Classifica
     defect_fields: [],
     has_defect: false,
     shipping_instruction: null,
+    bill_of_lading: null,
   };
 
   const bl = findActiveBl(classification.categories);
 
-  // The 7 SI values exist only for a BL comparison, the same way the four
-  // comparison fields above carry their defaults otherwise (rules.md invariant
-  // 7). A model that fills them in on a GENERAL or SI_REQUEST email is
+  // Both documents' values exist only for a BL comparison, the same way the
+  // four comparison fields above carry their defaults otherwise (rules.md
+  // invariant 7). A model that fills them in on a GENERAL or SI_REQUEST email is
   // corrected here rather than in the schema: a parse issue would burn one of
   // the three attempts and can fail the email outright.
-  response.shipping_instruction = toShippingInstruction(
-    Boolean(bl),
-    classification.shipping_instruction,
-  );
+  response.shipping_instruction = toDocumentValues(Boolean(bl), classification.shipping_instruction);
+  response.bill_of_lading = toDocumentValues(Boolean(bl), classification.bill_of_lading);
 
   if (bl?.status === "MISMATCH" || bl?.status === "OK") {
     const defects = new Set(bl.defect_fields ?? []);

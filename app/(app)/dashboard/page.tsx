@@ -4,7 +4,7 @@ import { AlertTriangle, ArrowRight, CheckCircle2, ClipboardCheck, Flag, Globe, I
 import { PageHeader, ResultBadge } from "@/components/ui";
 import { getDashboardData, type BarRow, type QueueItem } from "@/lib/dashboard";
 
-export const metadata: Metadata = { title: "Dashboard · Averis x Monash" };
+export const metadata: Metadata = { title: "Dashboard · APRIL Group" };
 export const dynamic = "force-dynamic";
 
 const pct = (part: number, whole: number) => (whole === 0 ? "0%" : `${Math.round((part / whole) * 100)}%`);
@@ -85,7 +85,7 @@ export default async function DashboardPage() {
   if (s.emailsProcessed === 0 && s.emailsTotal === 0) {
     return (
       <>
-        <PageHeader eyebrow="Overview" title="Dashboard" description="What Averis x Monash has processed from your inbox." />
+        <PageHeader eyebrow="Overview" title="Dashboard" description="What APRIL Group has processed from your inbox." />
         <div className="card flex flex-col items-center gap-3 p-12 text-center">
           <div className="dropicon"><Inbox size={28} strokeWidth={1.75} aria-hidden /></div>
           <h2 className="title">No batches yet</h2>
@@ -110,7 +110,7 @@ export default async function DashboardPage() {
       <PageHeader
         eyebrow="Overview"
         title="Dashboard"
-        description="What Averis x Monash has processed from your inbox."
+        description="What APRIL Group has processed from your inbox."
         actions={<span className="chip">Last 30 days</span>}
       />
 
@@ -170,7 +170,7 @@ export default async function DashboardPage() {
       <Queue
         title="Needs your review, oldest first"
         href="/review"
-        rowHref={(id) => `/batches?tab=review&email=${id}`}
+        rowHref={(id) => `/review?email=${id}`}
         cta="Open review queue"
         items={s.reviewQueue}
         empty="Nothing waiting for review."

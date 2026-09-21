@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { BatchesWorkspace } from "./workspace";
 
 export const metadata: Metadata = {
-  title: "Batches · Averis x Monash",
+  title: "Batches · APRIL Group",
   description: "Every stored email with its category, confidence and result.",
 };
 

@@ -5,7 +5,7 @@ import { parseMessage } from "@/lib/google/gmail";
 import { toClassifierAttachment } from "./extract-text";
 import { attachmentPath, uploadAttachment } from "./attachment-storage";
 import { processEmail } from "./index";
-import { shippingInstructionRow } from "./shipping-instruction";
+import { billOfLadingRow, shippingInstructionRow } from "./extracted-documents";
 
 type SyncedEmail = {
   id: string;
@@ -93,7 +93,7 @@ export async function processSyncedEmail(
     .single();
   if (error) throw new Error(`Saving analysis: ${error.message}`);
 
-  // Upsert, not insert, so re-running a failed job doesn't duplicate the row.
+  // Upsert, not insert, so re-running a failed job doesn't duplicate the rows.
   // A failure here throws like the two writes above: process-queue marks the
   // job failed. Its own FAILED row then conflicts with the analysis row
   // already written and no-ops, so the queue — not processed_emails.status —
@@ -107,5 +107,16 @@ export async function processSyncedEmail(
         { onConflict: "processed_email_id" },
       );
     if (siError) throw new Error(`Saving shipping instruction: ${siError.message}`);
+  }
+
+  const blRow = billOfLadingRow(result);
+  if (blRow) {
+    const { error: blError } = await supabase
+      .from("bill_of_lading")
+      .upsert(
+        { processed_email_id: processed.id, ...blRow },
+        { onConflict: "processed_email_id" },
+      );
+    if (blError) throw new Error(`Saving bill of lading: ${blError.message}`);
   }
 }

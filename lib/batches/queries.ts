@@ -6,8 +6,8 @@ import type { BatchEmail, BatchEmailViewRow, AttachmentRow } from "./types";
 
 export const PAGE_SIZE = 8;
 
-export type Tab = "all" | "comparison" | "review" | "low" | "failed";
-export type Sort = "newest" | "lowest";
+export type Tab = "all" | "comparison" | "review" | "mismatch" | "low" | "failed";
+export type Sort = "newest" | "oldest" | "lowest";
 
 export const TABS: { key: Tab; label: string; }[] = [
   { key: "all", label: "All" },
@@ -24,6 +24,7 @@ function escapeLike(value: string) {
 function fromViewRow(row: BatchEmailViewRow, attachments: AttachmentRow[] = [], body: string | null = null): BatchEmail {
   return {
     id: row.id,
+    processedId: row.processed_id ?? null,
     subject: row.subject,
     fromAddress: row.from_address,
     snippet: row.snippet,
@@ -48,7 +49,7 @@ function fromViewRow(row: BatchEmailViewRow, attachments: AttachmentRow[] = [], 
 
 export async function listBatchEmails(
   supabase: SupabaseClient,
-  opts: { tab: Tab; search: string; sort: Sort; page: number; },
+  opts: { tab: Tab; search: string; sort: Sort; page: number; reason?: string | null; field?: string | null; },
 ): Promise<{ rows: BatchEmail[]; total: number; }> {
   const from = (opts.page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
@@ -56,13 +57,19 @@ export async function listBatchEmails(
   let query = supabase
     .from("batch_emails")
     .select(
-      "id, subject, from_address, snippet, received_at, logged_at, is_unread, status, review_reason, defect_fields, reasoning, result, overall_confidence, classification_confidence, category",
+      "id, subject, from_address, snippet, received_at, logged_at, is_unread, status, review_reason, defect_fields, reasoning, result, overall_confidence, classification_confidence, category, processed_id",
       { count: "exact" },
     );
 
   if (opts.tab === "comparison") query = query.eq("category", "document_comparison");
-  else if (opts.tab === "review") query = query.eq("result", "needs_review");
-  else if (opts.tab === "low") query = query.lt("overall_confidence", AUTO_ACCEPT_THRESHOLD);
+  else if (opts.tab === "review") {
+    query = query.eq("result", "needs_review");
+    if (opts.reason) query = query.eq("review_reason", opts.reason);
+  }
+  else if (opts.tab === "mismatch") {
+    query = query.eq("result", "mismatch");
+    if (opts.field) query = query.contains("defect_fields", [opts.field]);
+  } else if (opts.tab === "low") query = query.lt("overall_confidence", AUTO_ACCEPT_THRESHOLD);
   else if (opts.tab === "failed") query = query.eq("result", "failed");
 
   const q = opts.search.trim();
@@ -74,7 +81,7 @@ export async function listBatchEmails(
   if (opts.sort === "lowest") {
     query = query.order("overall_confidence", { ascending: true, nullsFirst: false }).order("received_at", { ascending: false });
   } else {
-    query = query.order("received_at", { ascending: false });
+    query = query.order("received_at", { ascending: opts.sort === "oldest" });
   }
 
   const { data, error, count } = await query.range(from, to);
@@ -84,6 +91,45 @@ export async function listBatchEmails(
     rows: (data as unknown as BatchEmailViewRow[]).map((r) => fromViewRow(r)),
     total: count ?? 0,
   };
+}
+
+export type ReviewStats = { total: number; byReason: Record<string, number>; notified: number };
+
+/** Open review cases in total, per review_reason, and how many have been emailed to the sender. */
+export async function getReviewStats(supabase: SupabaseClient): Promise<ReviewStats> {
+  const { data, error } = await supabase
+    .from("processed_emails")
+    .select("review_reason, email_sent")
+    .eq("status", "NEEDS_REVIEW");
+  if (error) throw error;
+  const rows = (data ?? []) as { review_reason: string | null; email_sent: boolean | null }[];
+  const byReason: Record<string, number> = {};
+  for (const row of rows) {
+    const key = row.review_reason ?? "unknown";
+    byReason[key] = (byReason[key] ?? 0) + 1;
+  }
+  return { total: rows.length, byReason, notified: rows.filter((r) => r.email_sent).length };
+}
+
+export type MismatchStats = { total: number; byField: Record<string, number>; notified: number };
+
+/** Open mismatches in total, per differing field, and how many have been emailed to the sender. */
+export async function getMismatchStats(supabase: SupabaseClient): Promise<MismatchStats> {
+  const { data, error } = await supabase.from("processed_emails").select("defect_fields, email_sent").eq("status", "MISMATCH");
+  if (error) throw error;
+  const rows = (data ?? []) as { defect_fields: string[] | null; email_sent: boolean | null }[];
+
+  const byField: Record<string, number> = {};
+  for (const row of rows) for (const f of row.defect_fields ?? []) byField[f] = (byField[f] ?? 0) + 1;
+  return { total: rows.length, byField, notified: rows.filter((r) => r.email_sent).length };
+}
+
+/** Which of these processed emails have already been replied to (one reply is allowed per email). */
+export async function getEmailSentIds(supabase: SupabaseClient, processedIds: string[]): Promise<Set<string>> {
+  if (processedIds.length === 0) return new Set();
+  const { data, error } = await supabase.from("processed_emails").select("id").in("id", processedIds).eq("email_sent", true);
+  if (error) return new Set();
+  return new Set((data ?? []).map((r: { id: string }) => r.id));
 }
 
 export type BatchStats = {
@@ -121,7 +167,7 @@ export async function getBatchEmailDetail(supabase: SupabaseClient, id: string):
     supabase
       .from("batch_emails")
       .select(
-        "id, subject, from_address, snippet, received_at, logged_at, is_unread, status, review_reason, defect_fields, reasoning, result, overall_confidence, classification_confidence, category",
+        "id, subject, from_address, snippet, received_at, logged_at, is_unread, status, review_reason, defect_fields, reasoning, result, overall_confidence, classification_confidence, category, processed_id",
       )
       .eq("id", id)
       .maybeSingle(),

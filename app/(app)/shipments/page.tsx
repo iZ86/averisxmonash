@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/ui";
 import { getShipments } from "@/lib/shipments";
 import { ShipmentsView } from "./shipments-view";
 
-export const metadata: Metadata = { title: "Shipments · Averis x Monash" };
+export const metadata: Metadata = { title: "Shipments · APRIL Group" };
 export const dynamic = "force-dynamic";
 
 export default async function ShipmentsPage() {
