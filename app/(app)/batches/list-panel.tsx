@@ -157,7 +157,7 @@ export function ListPanel({
                 {hint ?? e.snippet ?? ""}
               </span>
               {/* Our own outgoing replies are not classified for the reader: no badges, just the message. */}
-              <span className={`${ours ? "hidden" : "flex"} flex-wrap items-center gap-2 pl-3.5 ${reply ? "pt-0.5" : "pt-1"} text-xs`}>
+              <span className={`${ours ? "hidden" : "flex"} flex-wrap items-center gap-1.5 pl-3.5 ${reply ? "pt-0.5" : "pt-1"} text-xs [&_.badge]:gap-1 [&_.badge]:px-2 [&_.badge]:whitespace-nowrap [&_.chip]:gap-1 [&_.chip]:px-2 [&_.chip]:whitespace-nowrap`}>
                 {isMismatchRow ? (
                   <>
                     {e.defectFields.map((f) => (
