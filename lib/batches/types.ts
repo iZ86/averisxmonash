@@ -104,8 +104,8 @@ export type BatchEmail = {
   attachments: { id: string; filename: string; mimeType: string | null; sizeBytes: number | null }[];
 
   /** Per-field SI/BL values, joined in from `shipping_instructions` and
-   * `bill_of_lading` by `getBatchEmailDetail`. Only set for mismatch/no_mismatch
-   * results — there's nothing to compare otherwise. No per-field confidence:
+   * `bill_of_lading` by `getBatchEmailDetail`. Set for mismatch, no_mismatch and
+   * needs_review results — otherwise there's nothing to show. No per-field confidence:
    * the classifier only ever scored the email as a whole. */
   fields?: FieldComparison[];
   /** Highlighted source-document evidence. Not populated by the current
