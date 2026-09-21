@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Flag, Globe, Inbox, LayoutDashboard, Upload, AlertTriangle } from "lucide-react";
+import { Flag, FileText, Globe, Receipt, Inbox, LayoutDashboard, Upload, AlertTriangle } from "lucide-react";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/batches", label: "Batches", icon: Inbox },
   { href: "/review", label: "Review queue", icon: Flag },
   { href: "/mismatches", label: "Mismatches", icon: AlertTriangle },
+  { href: "/instruction-requests", label: "SI Requests", icon: FileText },
+  { href: "/invoice-queries", label: "Invoice Queries", icon: Receipt },
   { href: "/shipments", label: "Shipments", icon: Globe },
   { href: "/upload", label: "Upload data", icon: Upload },
 ] as const;
@@ -16,11 +18,15 @@ const NAV = [
 export function SideNav({
   reviewCount,
   mismatchCount,
+  instructionCount,
+  invoiceCount,
   collapsed = false,
   onNavigate,
 }: {
   reviewCount: number;
   mismatchCount: number;
+  instructionCount: number;
+  invoiceCount: number;
   /** True when the desktop rail is collapsed to icons. Labels stay in the DOM
    * (so the mobile drawer, which is unaffected by this flag, always shows
    * them) and are hidden with `md:hidden` only in that state. */
@@ -53,6 +59,16 @@ export function SideNav({
             {href === "/review" && reviewCount > 0 && (
               <span className={`sidebar-collapsible count ${hideLabel}`} aria-label={`${reviewCount} cases to review`}>
                 {reviewCount}
+              </span>
+            )}
+            {href === "/instruction-requests" && instructionCount > 0 && (
+              <span className={`sidebar-collapsible count info ${hideLabel}`} aria-label={`${instructionCount} instruction requests without a reply`}>
+                {instructionCount}
+              </span>
+            )}
+            {href === "/invoice-queries" && invoiceCount > 0 && (
+              <span className={`sidebar-collapsible count muted ${hideLabel}`} aria-label={`${invoiceCount} invoice queries not yet replied to`}>
+                {invoiceCount}
               </span>
             )}
             {href === "/mismatches" && mismatchCount > 0 && (

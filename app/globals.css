@@ -40,6 +40,10 @@
      scales, since no existing token fits "new SI request" / "invoice query". */
   --category-si: #1d4ed8;
   --category-si-soft: rgba(37, 99, 235, 0.12);
+  /* Sky blue: instruction requests (sidebar badge, banner, badges). */
+  --info: #0284c7;
+  --on-info: #ffffff;
+  --info-soft: rgba(2, 132, 199, 0.12);
   --category-invoice: #6d28d9;
   --category-invoice-soft: rgba(124, 58, 237, 0.12);
 }
@@ -80,6 +84,9 @@
     --confidence-low: #ff8f86;
     --category-si: #60a5fa;
     --category-si-soft: rgba(96, 165, 250, 0.16);
+    --info: #7dd3fc;
+    --on-info: #0a1529;
+    --info-soft: rgba(125, 211, 252, 0.14);
     --category-invoice: #a78bfa;
     --category-invoice-soft: rgba(167, 139, 250, 0.16);
   }
@@ -119,6 +126,9 @@
   --confidence-low: #ff8f86;
   --category-si: #60a5fa;
   --category-si-soft: rgba(96, 165, 250, 0.16);
+  --info: #7dd3fc;
+  --on-info: #0a1529;
+  --info-soft: rgba(125, 211, 252, 0.14);
   --category-invoice: #a78bfa;
   --category-invoice-soft: rgba(167, 139, 250, 0.16);
 }
@@ -329,6 +339,10 @@ body {
     color: var(--text-label);
     background: rgba(125, 147, 186, 0.16);
   }
+  .badge.info {
+    color: var(--info);
+    background: var(--info-soft);
+  }
   .badge.neutral {
     color: var(--text-muted);
     background: var(--surface-inset);
@@ -460,6 +474,14 @@ body {
   }
   .nav a.on svg {
     color: var(--accent);
+  }
+  .nav .count.muted {
+    background: var(--on-brand-muted);
+    color: var(--brand-surface);
+  }
+  .nav .count.info {
+    background: var(--info);
+    color: var(--on-info);
   }
   .nav .count.bad {
     background: var(--status-mismatch);
