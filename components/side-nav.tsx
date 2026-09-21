@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Globe, Inbox, LayoutDashboard, Upload } from "lucide-react";
+import { Globe, Inbox, LayoutDashboard, Upload, AlertTriangle } from "lucide-react";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/batches", label: "Batches", icon: Inbox },
+  { href: "/mismatches", label: "Mismatches", icon: AlertTriangle },
   { href: "/shipments", label: "Shipments", icon: Globe },
   { href: "/upload", label: "Upload data", icon: Upload },
 ] as const;
