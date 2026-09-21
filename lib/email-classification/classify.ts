@@ -7,6 +7,7 @@ import {
   classificationJsonSchema,
   classificationSchema,
   findActiveBl,
+  findActiveSiRequest,
   type Classification,
   type ClassificationResponse,
   type ClassifierInput,
@@ -127,10 +128,10 @@ function stripNulls(value: unknown): unknown {
 }
 
 function toDocumentValues(
-  isBlComparison: boolean,
+  isActive: boolean,
   values: Classification["shipping_instruction"],
 ): ExtractedDocumentValues | null {
-  if (!isBlComparison || !values) return null;
+  if (!isActive || !values) return null;
   return Object.fromEntries(
     // `stripNulls` has already turned every null the model sent into an absent
     // key, so read each field back through a default rather than trusting it
@@ -160,6 +161,7 @@ function toResponse(emailId: string, classification: Classification): Classifica
     has_defect: false,
     shipping_instruction: null,
     bill_of_lading: null,
+    shipping_instruction_request: null,
   };
 
   const bl = findActiveBl(classification.categories);
@@ -171,6 +173,15 @@ function toResponse(emailId: string, classification: Classification): Classifica
   // the three attempts and can fail the email outright.
   response.shipping_instruction = toDocumentValues(Boolean(bl), classification.shipping_instruction);
   response.bill_of_lading = toDocumentValues(Boolean(bl), classification.bill_of_lading);
+
+  // The SI an SI_REQUEST email supplies, read from its attachment or its body.
+  // Gated the same way, on its own category: `findActiveSiRequest` gives
+  // BL_COMPARISON the tie, so this and the two objects above are never both
+  // filled in for one email.
+  response.shipping_instruction_request = toDocumentValues(
+    Boolean(findActiveSiRequest(classification.categories)),
+    classification.shipping_instruction_request,
+  );
 
   if (bl?.status === "MISMATCH" || bl?.status === "OK") {
     const defects = new Set(bl.defect_fields ?? []);

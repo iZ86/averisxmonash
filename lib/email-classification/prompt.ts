@@ -76,7 +76,7 @@ Matching values. The label tells you which field a value belongs to; a defect ca
 ## Document extraction
 Fill shipping_instruction with the 7 fields copied from the Shipping Instruction, and bill_of_lading with the 7 fields copied from the draft Bill of Lading, so each document's own values are recorded alongside the comparison.
 
-Omit both entirely unless BL_COMPARISON is the highest-confidence category. This holds even when a document is attached: an SI_REQUEST email carries a perfectly good SI and still extracts nothing.
+Omit both entirely unless BL_COMPARISON is the highest-confidence category. This holds even when a document is attached: an SI_REQUEST email carries a perfectly good SI, and it belongs in shipping_instruction_request below, never in these two.
 
 The two are decided independently. Fill in the one whose document is readable even when the other is missing, wrong or unreadable: an email that attaches the SI but forgets the draft BL fills shipping_instruction and omits bill_of_lading.
 
@@ -84,7 +84,17 @@ Within a BL comparison, omit a document's object entirely when there is nothing 
 
 Read each object off its own document only, identified by content as above, and never off the email body or a covering note.
 
-Copy each value as printed on the document, trimmed to a single line. Do not normalise it: no case folding, no punctuation stripping, no expanding or adding location codes, no unit conversion. "72,450.00 KG" stays "72,450.00 KG" and "3 x 40HC" stays "3 x 40HC". The alias table above says which printed label belongs to which field; it does not license rewriting the value. These strings are recorded as-is and are not what the comparison runs on: defect_fields, si_gross_weight_kg and bl_gross_weight_kg are unaffected by what goes here.
+## Shipping instruction requests
+Fill shipping_instruction_request with the same 7 fields when SI_REQUEST is the highest-confidence category, so the instructions the sender supplied are recorded.
+
+This is the one extraction that is not read off an attachment alone. An SI_REQUEST email often writes its instructions straight into the email body instead of attaching them, and the body is then the shipping instruction. Read the fields from whichever the email supplies: the attached SI, or the instructions set out in the body. Ignore a signature block, a quoted earlier message and any covering remarks; a sender's own address in their signature is not the shipper.
+
+The 7 fields carry the same meanings and the same alias table as above, and values are copied as printed in the same way. A field the email does not supply is null. Values written into a body often run across several lines (a consignee's name and address, or a container count and gross weight inside a description of goods); join each field onto one line and take only the part that belongs to it.
+
+Omit shipping_instruction_request entirely unless SI_REQUEST is the highest-confidence category, and omit it when the email supplies no instructions to read. It is never filled in alongside shipping_instruction and bill_of_lading: those belong to a BL comparison, this belongs to an SI request, and one email is only ever one of the two.
+
+## Copying values
+This applies to all three objects. Copy each value as printed, trimmed to a single line. Do not normalise it: no case folding, no punctuation stripping, no expanding or adding location codes, no unit conversion. "72,450.00 KG" stays "72,450.00 KG" and "3 x 40HC" stays "3 x 40HC". The alias table above says which printed label belongs to which field; it does not license rewriting the value. These strings are recorded as-is and are not what the comparison runs on: defect_fields, si_gross_weight_kg and bl_gross_weight_kg are unaffected by what goes here.
 
 ## Reasoning
 Fill in reasoning first. Keep it concise: explain why the category was chosen and how the status was reached, naming the fields that drove the outcome. For a BL comparison, state the SI value and the BL value of each of the 7 fields before deciding.`;
