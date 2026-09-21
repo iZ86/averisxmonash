@@ -1,5 +1,5 @@
 import { CATEGORIES, REVIEW_REASONS } from "@/lib/email-classification/schemas";
-import { FIELD_LABEL } from "@/lib/mock/data";
+import { FIELD_LABEL } from "@/lib/labels";
 import { createClient } from "@/lib/supabase/server";
 import type { Field } from "@/lib/types";
 
@@ -20,8 +20,6 @@ export const REVIEW_REASON_TEXT: Record<ReviewReason, { label: string; hint: str
   unreadable: { label: "Unreadable document", hint: "PDF is not in the correct format, or the text is unclear" },
   missing_value: { label: "Missing value", hint: "One of the 7 fields is empty or N/A" },
 };
-
-const REVIEWS_COMPLETED = 0;
 
 interface ProcessedRow {
   email_id: string;
@@ -68,7 +66,7 @@ const oldestFirst = (a: QueueItem, b: QueueItem) => Date.parse(a.at) - Date.pars
 
 export async function getDashboardData() {
   const supabase = await createClient();
-  const [processed, emails] = await Promise.all([
+  const [processed, emails, resolutions] = await Promise.all([
     supabase
       .from("processed_emails")
       .select("email_id,status,review_reason,defect_fields,categories,created_at")
@@ -77,10 +75,12 @@ export async function getDashboardData() {
       .from("emails")
       .select("id,gmail_message_id,subject,from_address,received_at")
       .returns<EmailRow[]>(),
+    supabase.from("review_resolutions").select("id", { count: "exact", head: true }),
   ]);
 
   if (processed.error) throw new Error(`processed_emails: ${processed.error.message}`);
   if (emails.error) throw new Error(`emails: ${emails.error.message}`);
+  if (resolutions.error) throw new Error(`review_resolutions: ${resolutions.error.message}`);
 
   const emailByKey = new Map<string, EmailRow>();
   for (const e of emails.data) {
@@ -153,7 +153,7 @@ export async function getDashboardData() {
     comparisonRequests,
     withMismatch: results.mismatch,
     awaitingReview: results.needsReview,
-    reviewsCompleted: REVIEWS_COMPLETED,
+    reviewsCompleted: resolutions.count ?? 0,
     shipmentsMapped: results.noMismatch + results.mismatch,
     byCategory,
     byField,
