@@ -3,7 +3,7 @@ import type { gmail_v1 } from "googleapis";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createGmailClient, parseMessage, getHeader, fetchWithBackoff } from "@/lib/google/gmail";
 import { mapWithConcurrency } from "@/lib/email-processing";
-import { SYNC_LOCK_STALE_MS } from "@/lib/batches/constants";
+import { IGNORED_SENDER, SYNC_LOCK_STALE_MS } from "@/lib/batches/constants";
 
 const FIRST_SYNC_DAYS = 30;
 const GMAIL_LIST_PAGE_SIZE = 100;
@@ -107,11 +107,19 @@ export async function runGmailSync(supabase: Supabase, userId: string): Promise<
     const existingRows = rows.filter((r) => !insertedIds.has(r.email.gmail_message_id));
 
     if (inserted.length > 0) {
-      const { error: queueError } = await supabase.from("email_processing_queue").upsert(
-        inserted.map((row) => ({ email_id: row.id, user_id: userId })),
-        { onConflict: "email_id", ignoreDuplicates: true },
+      // Our own outgoing messages (replies sent from the mailbox) are stored so threads read
+      // completely, but never classified.
+      const ownIds = new Set(
+        rows.filter((r) => r.email.from_address.toLowerCase() === IGNORED_SENDER).map((r) => r.email.gmail_message_id),
       );
-      if (queueError) throw queueError;
+      const toClassify = inserted.filter((row) => !ownIds.has(row.gmail_message_id));
+      if (toClassify.length > 0) {
+        const { error: queueError } = await supabase.from("email_processing_queue").upsert(
+          toClassify.map((row) => ({ email_id: row.id, user_id: userId })),
+          { onConflict: "email_id", ignoreDuplicates: true },
+        );
+        if (queueError) throw queueError;
+      }
 
       // Once an email is captured here, it no longer needs to show as unread
       // in Gmail. Best-effort per row: a failed mark-as-read (e.g. the refresh

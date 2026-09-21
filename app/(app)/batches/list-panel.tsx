@@ -1,8 +1,10 @@
 "use client";
 
-import { AlertTriangle, ArrowUpDown, ChevronLeft, ChevronRight, Clock3, Flag, Mail } from "lucide-react";
+import { useState } from "react";
+import { AlertTriangle, ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, Clock3, Flag, Mail, MessagesSquare, Send } from "lucide-react";
 import { CategoryChip, ResultBadge } from "@/components/ui";
 import { fmtShort } from "@/lib/batches/format";
+import { isOwnAddress } from "@/lib/batches/constants";
 import { PAGE_SIZE, type Sort } from "@/lib/batches/queries";
 import type { BatchEmail } from "@/lib/batches/types";
 import { REVIEW_REASON_TEXT } from "@/lib/batches/map-labels";
@@ -50,7 +52,8 @@ export function ListPanel({
 }) {
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const from = (page - 1) * PAGE_SIZE;
-  const selectable = rows.map((r) => r.processedId).filter((id): id is string => !!id);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const selectable = rows.filter((r) => r.inFilter !== false).map((r) => r.processedId).filter((id): id is string => !!id);
   const allChecked = !!selection && selectable.length > 0 && selectable.every((id) => selection.checked.has(id));
 
   return (
@@ -87,10 +90,19 @@ export function ListPanel({
           Try another filter or clear the search.
         </div>
       ) : (
-        rows.map((e) => {
+        threadGroups(rows).map((group) => {
+          const threaded = group.length > 1;
+          const threadKey = group[0].threadId ?? group[0].id;
+          // Collapsing hides the replies but keeps the first email; a reply that is selected keeps the thread open.
+          const open = !collapsed.has(threadKey) || group.some((g, gi) => gi > 0 && g.id === selectedId);
+          const items = group.map((e, i) => {
           const sel = e.id === selectedId;
-          const isReviewRow = variant === "review";
-          const isMismatchRow = variant === "mismatch";
+          const reply = threaded && i > 0;
+          const ours = isOwnAddress(e.fromAddress);
+          const inFilter = e.inFilter !== false;
+          // Context rows (outside the filter) always show their own category/result, whatever the page.
+          const isReviewRow = variant === "review" && inFilter;
+          const isMismatchRow = variant === "mismatch" && inFilter;
           const hint = isReviewRow || isMismatchRow ? null : reviewHint(e);
           const isSent = !!e.processedId && !!selection?.sent.has(e.processedId);
           const row = (
@@ -99,29 +111,53 @@ export function ListPanel({
               type="button"
               aria-current={sel}
               onClick={() => onSelect(e.id)}
-              className={`relative flex w-full flex-col gap-0.5 border-t border-border px-4.5 py-3.5 ${isMismatchRow ? "pl-11" : "pl-5"} text-left ${sel ? "bg-surface-inset" : "hover:bg-surface-inset"}`}
+              className={`relative flex w-full flex-col gap-0.5 px-4.5 text-left ${threaded ? "" : "border-t border-border"} ${reply ? "border-t border-border/60 py-2.5" : "py-3.5"} ${isMismatchRow ? (reply ? "pl-12" : "pl-11") : reply ? "pl-9" : "pl-5"} ${sel ? "bg-surface-inset" : ours ? "bg-accent/5 hover:bg-surface-inset" : "hover:bg-surface-inset"} ${inFilter ? "" : "opacity-65"}`}
             >
               {sel && (
                 <span className="absolute inset-y-0 left-0 w-[3px] bg-accent" />
               )}
-              <span className="flex min-w-0 items-center gap-2">
-                <span
-                  className={`size-1.5 shrink-0 rounded-full ${e.isUnread ? "bg-accent" : "bg-transparent"}`}
-                />
-                <span className="truncate text-[14.5px] font-semibold">
-                  {e.subject}
+              {reply ? (
+                // Replies are compact: who and when, then a one-line preview.
+                <span className="flex min-w-0 items-center justify-between gap-2.5 text-xs">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className={`size-1.5 shrink-0 rounded-full ${e.isUnread ? "bg-accent" : "bg-transparent"}`} />
+                    {ours ? (
+                      <span className="flex items-center gap-1 font-semibold text-accent">
+                        <Send size={12} strokeWidth={1.75} aria-hidden />
+                        You
+                      </span>
+                    ) : (
+                      <span className="truncate font-semibold text-text-strong">{e.fromAddress}</span>
+                    )}
+                  </span>
+                  <span className="shrink-0 text-text-muted">{fmtShort(e.receivedAt)}</span>
                 </span>
-              </span>
-              <span className="flex justify-between gap-2.5 pl-3.5 text-xs text-text-muted">
-                <span className="truncate">{e.fromAddress}</span>
-                <span className="shrink-0">{fmtShort(e.receivedAt)}</span>
-              </span>
+              ) : (
+                <>
+                  <span className={`flex min-w-0 items-center gap-2 ${threaded ? "pr-14" : ""}`}>
+                    <span className={`size-1.5 shrink-0 rounded-full ${e.isUnread ? "bg-accent" : "bg-transparent"}`} />
+                    <span className="truncate text-[14.5px] font-semibold">{e.subject}</span>
+                  </span>
+                  <span className="flex justify-between gap-2.5 pl-3.5 text-xs text-text-muted">
+                    {ours ? (
+                      <span className="flex items-center gap-1 font-medium text-accent">
+                        <Send size={12} strokeWidth={1.75} aria-hidden />
+                        Sent by you
+                      </span>
+                    ) : (
+                      <span className="truncate">{e.fromAddress}</span>
+                    )}
+                    <span className="shrink-0">{fmtShort(e.receivedAt)}</span>
+                  </span>
+                </>
+              )}
               <span
                 className={`truncate pl-3.5 text-xs ${hint ? "text-text-muted" : "text-text-subtle"}`}
               >
                 {hint ?? e.snippet ?? ""}
               </span>
-              <span className="flex flex-wrap items-center gap-2 pl-3.5 pt-1 text-xs">
+              {/* Our own outgoing replies are not classified for the reader: no badges, just the message. */}
+              <span className={`${ours ? "hidden" : "flex"} flex-wrap items-center gap-2 pl-3.5 ${reply ? "pt-0.5" : "pt-1"} text-xs`}>
                 {isMismatchRow ? (
                   <>
                     {e.defectFields.map((f) => (
@@ -156,7 +192,8 @@ export function ListPanel({
               </span>
             </button>
           );
-          if (!isMismatchRow || !selection) return row;
+          // Thread siblings outside the current filter are context only: never selectable for bulk email.
+          if (!isMismatchRow || !selection || !inFilter) return row;
           // The checkbox sits beside the row button rather than inside it (a button cannot contain a control).
           return (
             <div key={e.id} className="relative">
@@ -167,8 +204,35 @@ export function ListPanel({
                 disabled={!e.processedId}
                 checked={!!e.processedId && selection.checked.has(e.processedId)}
                 onChange={() => e.processedId && selection.onToggle(e.processedId)}
-                className="absolute top-4 left-4.5 size-4 cursor-pointer accent-[var(--accent)]"
+                className={`absolute size-4 cursor-pointer accent-[var(--accent)] ${reply ? "top-3 left-7" : "top-4 left-4.5"}`}
               />
+            </div>
+          );
+          });
+          if (!threaded) return items;
+          return (
+            <div key={threadKey} className="border-t border-border">
+              <div className="relative ml-4.5 border-l-2 border-border">
+                {open ? items : items[0]}
+                {/* Sits in the first email's top-right corner, beside the subject; a sibling of the row button (a button cannot contain a button). */}
+                <button
+                  type="button"
+                  aria-expanded={open}
+                  aria-label={open ? "Collapse thread" : `Show ${group.length - 1} more in thread`}
+                  onClick={() =>
+                    setCollapsed((prev) => {
+                      const next = new Set(prev);
+                      if (!next.delete(threadKey)) next.add(threadKey);
+                      return next;
+                    })
+                  }
+                  className="absolute top-2.5 right-3 flex items-center gap-1 rounded-full border border-border bg-surface-page px-2 py-0.5 text-xs text-text-muted hover:text-text-strong"
+                >
+                  <MessagesSquare size={13} strokeWidth={1.75} aria-hidden />
+                  {group.length}
+                  <ChevronDown size={14} strokeWidth={1.75} aria-hidden className={open ? "" : "-rotate-90"} />
+                </button>
+              </div>
             </div>
           );
         })
@@ -218,6 +282,17 @@ export function ListPanel({
       )}
     </section>
   );
+}
+
+/** Consecutive rows sharing a threadId form one group (groupByThread already orders them that way). */
+function threadGroups(rows: BatchEmail[]): BatchEmail[][] {
+  const groups: BatchEmail[][] = [];
+  for (const r of rows) {
+    const last = groups[groups.length - 1];
+    if (r.threadId && last && last[0].threadId === r.threadId) last.push(r);
+    else groups.push([r]);
+  }
+  return groups;
 }
 
 function pageNumbers(page: number, pages: number): number[] {

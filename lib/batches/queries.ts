@@ -87,10 +87,59 @@ export async function listBatchEmails(
   const { data, error, count } = await query.range(from, to);
   if (error) throw error;
 
-  return {
-    rows: (data as unknown as BatchEmailViewRow[]).map((r) => fromViewRow(r)),
-    total: count ?? 0,
-  };
+  const matched = (data as unknown as BatchEmailViewRow[]).map((r) => ({ ...fromViewRow(r), inFilter: true }));
+  return { rows: await groupByThread(supabase, matched), total: count ?? 0 };
+}
+
+/**
+ * Presentation only: links the page's emails to the other emails in their Gmail thread (via
+ * emails.gmail_thread_id) so replies sit next to the message they answer. Classification is untouched —
+ * each email keeps its own analysis. Siblings that fall outside the current filter are included for context
+ * (inFilter: false). Output is ordered by thread (first appearance), oldest message first within a thread.
+ */
+async function groupByThread(supabase: SupabaseClient, matched: BatchEmail[]): Promise<BatchEmail[]> {
+  if (matched.length === 0) return matched;
+
+  const { data: own, error: ownError } = await supabase
+    .from("emails")
+    .select("id, gmail_thread_id")
+    .in("id", matched.map((r) => r.id));
+  if (ownError) throw ownError;
+  const threadOf = new Map((own ?? []).map((r: { id: string; gmail_thread_id: string | null }) => [r.id, r.gmail_thread_id]));
+  const threadIds = [...new Set([...threadOf.values()].filter((t): t is string => !!t))];
+
+  const siblings: BatchEmail[] = [];
+  if (threadIds.length > 0) {
+    const { data: threadRows, error: threadError } = await supabase
+      .from("emails")
+      .select("id, gmail_thread_id")
+      .in("gmail_thread_id", threadIds);
+    if (threadError) throw threadError;
+    const have = new Set(matched.map((r) => r.id));
+    const extra = (threadRows ?? []).filter((r: { id: string }) => !have.has(r.id));
+    for (const r of extra as { id: string; gmail_thread_id: string }[]) threadOf.set(r.id, r.gmail_thread_id);
+    if (extra.length > 0) {
+      const { data: viewRows, error: viewError } = await supabase
+        .from("batch_emails")
+        .select(
+          "id, subject, from_address, snippet, received_at, logged_at, is_unread, status, review_reason, defect_fields, reasoning, result, overall_confidence, classification_confidence, category, processed_id",
+        )
+        .in("id", extra.map((r: { id: string }) => r.id));
+      if (viewError) throw viewError;
+      for (const r of viewRows as unknown as BatchEmailViewRow[]) siblings.push({ ...fromViewRow(r), inFilter: false });
+    }
+  }
+
+  const groups = new Map<string, BatchEmail[]>();
+  for (const e of [...matched, ...siblings]) {
+    const threadId = threadOf.get(e.id) ?? null;
+    const key = threadId ?? `solo:${e.id}`;
+    const list = groups.get(key) ?? [];
+    list.push({ ...e, threadId });
+    groups.set(key, list);
+  }
+  // Map keeps insertion order, and matched rows were inserted first, so threads follow the page's sort.
+  return [...groups.values()].flatMap((g) => g.sort((a, b) => a.receivedAt.localeCompare(b.receivedAt)));
 }
 
 export type ReviewStats = { total: number; byReason: Record<string, number>; notified: number };

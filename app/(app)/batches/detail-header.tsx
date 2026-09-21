@@ -1,6 +1,7 @@
 "use client";
 
 import { fmtFull } from "@/lib/batches/format";
+import { isOwnAddress } from "@/lib/batches/constants";
 import { CATEGORY_LABEL } from "@/lib/mock/data";
 import type { BatchEmail } from "@/lib/batches/types";
 import { ComparisonActions } from "./comparison-view";
@@ -35,7 +36,9 @@ export function DetailHeader({
   /** The Mismatches page has its own actions, so the Send to review / Export result pair is hidden there. */
   hideComparisonActions?: boolean;
 }) {
-  const canReview = email.result === "mismatch" || email.result === "no_mismatch";
+  // Our own messages are never analysed: no analysis tab, no category/status chips, no retry.
+  const ours = isOwnAddress(email.fromAddress);
+  const canReview = !ours && (email.result === "mismatch" || email.result === "no_mismatch");
 
   return (
     <>
@@ -46,14 +49,20 @@ export function DetailHeader({
           </h2>
           <p className="cap mt-1">From {email.fromAddress} · received {fmtFull(email.receivedAt).toLowerCase()}</p>
           <div className="mt-2 flex flex-wrap gap-2">
-            <span className="chip">{email.category ? CATEGORY_LABEL[email.category] : "Not classified yet"}</span>
-            <span className="chip border border-border-control bg-transparent text-text-muted">{STATUS_LABEL[email.result]}</span>
+            {ours ? (
+              <span className="chip">Sent by you</span>
+            ) : (
+              <>
+                <span className="chip">{email.category ? CATEGORY_LABEL[email.category] : "Not classified yet"}</span>
+                <span className="chip border border-border-control bg-transparent text-text-muted">{STATUS_LABEL[email.result]}</span>
+              </>
+            )}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
           {canReview && !hideComparisonActions && <ComparisonActions email={email} />}
           {extraActions}
-          {email.result === "failed" && (
+          {!ours && email.result === "failed" && (
             <button type="button" className="btn primary" disabled={retrying} onClick={onRetry}>
               {retrying ? "Retrying…" : "Retry"}
             </button>
@@ -61,15 +70,17 @@ export function DetailHeader({
         </div>
       </header>
       <div className="flex gap-5 border-b border-border" role="tablist">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === "analysis"}
-          onClick={() => onTabChange("analysis")}
-          className={`-mb-px border-b-2 px-0.5 py-2.5 font-medium ${tab === "analysis" ? "border-accent text-text-strong" : "border-transparent text-text-muted hover:text-text-strong"}`}
-        >
-          Analysis
-        </button>
+        {!ours && (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "analysis"}
+            onClick={() => onTabChange("analysis")}
+            className={`-mb-px border-b-2 px-0.5 py-2.5 font-medium ${tab === "analysis" ? "border-accent text-text-strong" : "border-transparent text-text-muted hover:text-text-strong"}`}
+          >
+            Analysis
+          </button>
+        )}
         <button
           type="button"
           role="tab"

@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { AUTO_ACCEPT_THRESHOLD } from "@/lib/confidence";
 import { fmtRel } from "@/lib/batches/format";
+import { isOwnAddress } from "@/lib/batches/constants";
 import {
   TABS,
   type Sort,
@@ -59,8 +60,9 @@ export type WorkspaceMode = "all" | "review" | "mismatch";
 
 const isField = (v: string | null): v is ReviewField => !!v && (REVIEW_FIELDS as readonly string[]).includes(v);
 
-function defaultDetailTab(): DetailTab {
-  return "analysis";
+/** Our own messages have no analysis, so they open straight on the email itself. */
+function defaultDetailTab(email: BatchEmail): DetailTab {
+  return isOwnAddress(email.fromAddress) ? "email" : "analysis";
 }
 
 export function BatchesWorkspace({ mode = "all" }: { mode?: WorkspaceMode }) {
@@ -316,7 +318,7 @@ export function BatchesWorkspace({ mode = "all" }: { mode?: WorkspaceMode }) {
       return;
     }
     // A deep-linked email may sit on a later page, so only pick a default when nothing is selected.
-    if (!selectedId) setParams({ email: rows[0].id });
+    if (!selectedId) setParams({ email: (rows.find((r) => r.inFilter !== false) ?? rows[0]).id });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, listLoading]);
 
@@ -332,7 +334,7 @@ export function BatchesWorkspace({ mode = "all" }: { mode?: WorkspaceMode }) {
         setDetail(e);
         setContentLoadedFor(null);
         if (e) {
-          setDetailTab(defaultDetailTab());
+          setDetailTab(defaultDetailTab(e));
           setAttachmentId(null);
           if (e.isUnread) {
             markEmailRead(supabase, e.id).then(() => {

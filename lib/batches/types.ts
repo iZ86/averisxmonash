@@ -82,6 +82,10 @@ export type BatchEmail = {
   loggedAt: string;
   isUnread: boolean;
   body: string | null; // only populated when fetched for the detail pane
+  /** Gmail conversation this email belongs to (emails.gmail_thread_id); null when unknown. */
+  threadId?: string | null;
+  /** False for a thread sibling pulled in only for context (it does not match the current tab/filter/search). */
+  inFilter?: boolean;
 
   /** "pending" = synced but never analysed. */
   result: Result | "pending";
