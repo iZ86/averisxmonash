@@ -6,7 +6,7 @@ import type { BatchEmail, BatchEmailViewRow, AttachmentRow } from "./types";
 
 export const PAGE_SIZE = 8;
 
-export type Tab = "all" | "comparison" | "review" | "low" | "failed";
+export type Tab = "all" | "comparison" | "review" | "mismatch" | "low" | "failed";
 export type Sort = "newest" | "oldest" | "lowest";
 
 export const TABS: { key: Tab; label: string; }[] = [
@@ -49,7 +49,7 @@ function fromViewRow(row: BatchEmailViewRow, attachments: AttachmentRow[] = [], 
 
 export async function listBatchEmails(
   supabase: SupabaseClient,
-  opts: { tab: Tab; search: string; sort: Sort; page: number; reason?: string | null; },
+  opts: { tab: Tab; search: string; sort: Sort; page: number; reason?: string | null; field?: string | null; },
 ): Promise<{ rows: BatchEmail[]; total: number; }> {
   const from = (opts.page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
@@ -66,7 +66,10 @@ export async function listBatchEmails(
     query = query.eq("result", "needs_review");
     if (opts.reason) query = query.eq("review_reason", opts.reason);
   }
-  else if (opts.tab === "low") query = query.lt("overall_confidence", AUTO_ACCEPT_THRESHOLD);
+  else if (opts.tab === "mismatch") {
+    query = query.eq("result", "mismatch");
+    if (opts.field) query = query.contains("defect_fields", [opts.field]);
+  } else if (opts.tab === "low") query = query.lt("overall_confidence", AUTO_ACCEPT_THRESHOLD);
   else if (opts.tab === "failed") query = query.eq("result", "failed");
 
   const q = opts.search.trim();
@@ -90,18 +93,43 @@ export async function listBatchEmails(
   };
 }
 
-export type ReviewStats = { total: number; byReason: Record<string, number> };
+export type ReviewStats = { total: number; byReason: Record<string, number>; notified: number };
 
-/** Open review cases in total and per review_reason. */
+/** Open review cases in total, per review_reason, and how many have been emailed to the sender. */
 export async function getReviewStats(supabase: SupabaseClient): Promise<ReviewStats> {
-  const { data, error } = await supabase.from("batch_emails").select("review_reason").eq("result", "needs_review");
+  const { data, error } = await supabase
+    .from("processed_emails")
+    .select("review_reason, email_sent")
+    .eq("status", "NEEDS_REVIEW");
   if (error) throw error;
+  const rows = (data ?? []) as { review_reason: string | null; email_sent: boolean | null }[];
   const byReason: Record<string, number> = {};
-  for (const row of (data ?? []) as { review_reason: string | null }[]) {
+  for (const row of rows) {
     const key = row.review_reason ?? "unknown";
     byReason[key] = (byReason[key] ?? 0) + 1;
   }
-  return { total: data?.length ?? 0, byReason };
+  return { total: rows.length, byReason, notified: rows.filter((r) => r.email_sent).length };
+}
+
+export type MismatchStats = { total: number; byField: Record<string, number>; notified: number };
+
+/** Open mismatches in total, per differing field, and how many have been emailed to the sender. */
+export async function getMismatchStats(supabase: SupabaseClient): Promise<MismatchStats> {
+  const { data, error } = await supabase.from("processed_emails").select("defect_fields, email_sent").eq("status", "MISMATCH");
+  if (error) throw error;
+  const rows = (data ?? []) as { defect_fields: string[] | null; email_sent: boolean | null }[];
+
+  const byField: Record<string, number> = {};
+  for (const row of rows) for (const f of row.defect_fields ?? []) byField[f] = (byField[f] ?? 0) + 1;
+  return { total: rows.length, byField, notified: rows.filter((r) => r.email_sent).length };
+}
+
+/** Which of these processed emails have already been replied to (one reply is allowed per email). */
+export async function getEmailSentIds(supabase: SupabaseClient, processedIds: string[]): Promise<Set<string>> {
+  if (processedIds.length === 0) return new Set();
+  const { data, error } = await supabase.from("processed_emails").select("id").in("id", processedIds).eq("email_sent", true);
+  if (error) return new Set();
+  return new Set((data ?? []).map((r: { id: string }) => r.id));
 }
 
 export type BatchStats = {

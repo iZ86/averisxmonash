@@ -1,12 +1,12 @@
 "use client";
 
-import { ArrowUpDown, ChevronLeft, ChevronRight, Clock3, Flag } from "lucide-react";
+import { AlertTriangle, ArrowUpDown, ChevronLeft, ChevronRight, Clock3, Flag, Mail } from "lucide-react";
 import { CategoryChip, ResultBadge } from "@/components/ui";
 import { fmtShort } from "@/lib/batches/format";
 import { PAGE_SIZE, type Sort } from "@/lib/batches/queries";
 import type { BatchEmail } from "@/lib/batches/types";
 import { REVIEW_REASON_TEXT } from "@/lib/batches/map-labels";
-import { REVIEW_CASES, isReviewReason } from "@/lib/batches/review-cases";
+import { REVIEW_CASES, REVIEW_FIELD_LABEL, isReviewReason, type ReviewField } from "@/lib/batches/review-cases";
 
 function reviewHint(email: BatchEmail) {
   return email.reviewReasonRaw
@@ -26,6 +26,7 @@ export function ListPanel({
   onPageChange,
   noun = { one: "email", many: "emails" },
   variant = "all",
+  selection,
 }: {
   rows: BatchEmail[];
   total: number;
@@ -38,17 +39,38 @@ export function ListPanel({
   onPageChange: (page: number) => void;
   noun?: { one: string; many: string };
   /** "review" is the Review Queue: rows show the review reason instead of the category and result. */
-  variant?: "all" | "review";
+  variant?: "all" | "review" | "mismatch";
+  /** Mismatches only: checkboxes for bulk emailing, and which rows have already been emailed. */
+  selection?: {
+    checked: Set<string>;
+    sent: Set<string>;
+    onToggle: (processedId: string) => void;
+    onToggleAll: (processedIds: string[], on: boolean) => void;
+  };
 }) {
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const from = (page - 1) * PAGE_SIZE;
+  const selectable = rows.map((r) => r.processedId).filter((id): id is string => !!id);
+  const allChecked = !!selection && selectable.length > 0 && selectable.every((id) => selection.checked.has(id));
 
   return (
     <section className="card overflow-hidden" aria-label="Emails">
       <div className="flex items-center justify-between gap-2 px-4.5 py-3.5">
-        <b className="font-semibold">
-          {total.toLocaleString("en-US")} {total === 1 ? noun.one : noun.many}
-        </b>
+        <span className="flex items-center gap-2.5">
+          {selection && (
+            <input
+              type="checkbox"
+              aria-label="Select all on this page"
+              checked={allChecked}
+              disabled={selectable.length === 0}
+              onChange={(ev) => selection.onToggleAll(selectable, ev.target.checked)}
+              className="size-4 cursor-pointer accent-[var(--accent)]"
+            />
+          )}
+          <b className="font-semibold">
+            {total.toLocaleString("en-US")} {total === 1 ? noun.one : noun.many}
+          </b>
+        </span>
         <button
           type="button"
           onClick={onSortToggle}
@@ -68,14 +90,16 @@ export function ListPanel({
         rows.map((e) => {
           const sel = e.id === selectedId;
           const isReviewRow = variant === "review";
-          const hint = isReviewRow ? null : reviewHint(e);
-          return (
+          const isMismatchRow = variant === "mismatch";
+          const hint = isReviewRow || isMismatchRow ? null : reviewHint(e);
+          const isSent = !!e.processedId && !!selection?.sent.has(e.processedId);
+          const row = (
             <button
               key={e.id}
               type="button"
               aria-current={sel}
               onClick={() => onSelect(e.id)}
-              className={`relative flex w-full flex-col gap-0.5 border-t border-border px-4.5 py-3.5 pl-5 text-left ${sel ? "bg-surface-inset" : "hover:bg-surface-inset"}`}
+              className={`relative flex w-full flex-col gap-0.5 border-t border-border px-4.5 py-3.5 ${isMismatchRow ? "pl-11" : "pl-5"} text-left ${sel ? "bg-surface-inset" : "hover:bg-surface-inset"}`}
             >
               {sel && (
                 <span className="absolute inset-y-0 left-0 w-[3px] bg-accent" />
@@ -98,7 +122,22 @@ export function ListPanel({
                 {hint ?? e.snippet ?? ""}
               </span>
               <span className="flex flex-wrap items-center gap-2 pl-3.5 pt-1 text-xs">
-                {isReviewRow ? (
+                {isMismatchRow ? (
+                  <>
+                    {e.defectFields.map((f) => (
+                      <span className="badge bad" key={f}>
+                        <AlertTriangle size={14} strokeWidth={1.75} aria-hidden />
+                        {REVIEW_FIELD_LABEL[f as ReviewField] ?? f}
+                      </span>
+                    ))}
+                    {isSent && (
+                      <span className="badge ok">
+                        <Mail size={14} strokeWidth={1.75} aria-hidden />
+                        Email sent
+                      </span>
+                    )}
+                  </>
+                ) : isReviewRow ? (
                   <span className="badge rev">
                     <Flag size={14} strokeWidth={1.75} aria-hidden />
                     {isReviewReason(e.reviewReasonRaw) ? REVIEW_CASES[e.reviewReasonRaw].title : "Needs review"}
@@ -113,9 +152,24 @@ export function ListPanel({
                 ) : (
                   <span className="text-text-muted">n/a</span>
                 )}
-                {!isReviewRow && e.result !== "pending" && <ResultBadge result={e.result} />}
+                {!isReviewRow && !isMismatchRow && e.result !== "pending" && <ResultBadge result={e.result} />}
               </span>
             </button>
+          );
+          if (!isMismatchRow || !selection) return row;
+          // The checkbox sits beside the row button rather than inside it (a button cannot contain a control).
+          return (
+            <div key={e.id} className="relative">
+              {row}
+              <input
+                type="checkbox"
+                aria-label={`Select ${e.subject}`}
+                disabled={!e.processedId}
+                checked={!!e.processedId && selection.checked.has(e.processedId)}
+                onChange={() => e.processedId && selection.onToggle(e.processedId)}
+                className="absolute top-4 left-4.5 size-4 cursor-pointer accent-[var(--accent)]"
+              />
+            </div>
           );
         })
       )}

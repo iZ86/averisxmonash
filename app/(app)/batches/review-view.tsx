@@ -17,7 +17,7 @@ import { REVIEW_REASON_TEXT } from "@/lib/batches/map-labels";
 import type { BatchEmail } from "@/lib/batches/types";
 
 type Resolution = { decision: "accepted" | "rejected"; action: string };
-type Loaded = { defaults: FieldValues | null; resolution: Resolution | null };
+type Loaded = { defaults: FieldValues | null; resolution: Resolution | null; emailSent: boolean };
 
 const blank = () => Object.fromEntries(REVIEW_FIELDS.map((f) => [f, ""])) as FieldValues;
 
@@ -42,6 +42,8 @@ export function ReviewView({ email, onResolved }: { email: BatchEmail; onResolve
 
   const [loaded, setLoaded] = useState<Loaded | "loading" | { error: string }>("loading");
   const [mode, setMode] = useState<"accept" | "reject" | null>(null);
+  // Cases that can only be rejected (missing attachment / missing value) go straight to the email; the others let the reviewer choose.
+  const activeMode = kase && !kase.accept ? "reject" : mode;
   const [fields, setFields] = useState<FieldValues>(blank);
   const [busy, setBusy] = useState(false);
 
@@ -66,7 +68,10 @@ export function ReviewView({ email, onResolved }: { email: BatchEmail; onResolve
   }, [processedId, apply]);
 
   const data = typeof loaded === "object" && "defaults" in loaded ? loaded : null;
-  const reply = reason ? replyContent({ from: email.fromAddress, subject: email.subject, reason }) : null;
+  const template = reason ? replyContent({ from: email.fromAddress, subject: email.subject, reason }) : null;
+  // The reviewer may edit the subject and body; the recipient is always the original sender.
+  const [draft, setDraft] = useState<{ subject: string; body: string } | null>(null);
+  const reply = template && { to: template.to, subject: draft?.subject ?? template.subject, body: draft?.body ?? template.body };
   const allFilled = REVIEW_FIELDS.every((f) => fields[f].trim());
 
   async function run(task: () => Promise<void>) {
@@ -94,7 +99,7 @@ export function ReviewView({ email, onResolved }: { email: BatchEmail; onResolve
   const saveRejected = () =>
     run(async () => {
       if (!kase || !reply) return;
-      const result = await post({ processedEmailId: email.processedId, decision: "rejected" });
+      const result = await post({ processedEmailId: email.processedId, decision: "rejected", ...(draft ?? {}) });
       toast.success(`Rejected. Reply sent to ${result.sentTo ?? reply.to}.`, { description: email.subject });
       await load();
       onResolved();
@@ -143,31 +148,74 @@ export function ReviewView({ email, onResolved }: { email: BatchEmail; onResolve
         </div>
       ) : (
         <>
-          <div className="grid gap-3 md:grid-cols-2">
-            {kase.accept && (
+          {kase.accept ? (
+            <div className="grid gap-3 md:grid-cols-2">
               <OptionCard
                 selected={mode === "accept"}
                 title={kase.accept.label}
                 hint={kase.accept.hint}
                 onClick={() => setMode("accept")}
               />
-            )}
-            <OptionCard selected={mode === "reject"} title={kase.reject.label} hint={kase.reject.hint} onClick={() => setMode("reject")} />
-          </div>
+              {data.emailSent ? (
+                <SentNotice />
+              ) : (
+                <OptionCard selected={mode === "reject"} title={kase.reject.label} hint={kase.reject.hint} onClick={() => setMode("reject")} />
+              )}
+            </div>
+          ) : (
+            data.emailSent && <SentNotice />
+          )}
 
-          {mode === "reject" && (
+          {activeMode === "reject" && !data.emailSent && (
             <div className="card flex flex-col gap-4 p-5">
               <div>
-                <h2 className="title">Reply to the sender</h2>
-                <p className="cap">Rejecting sends this reply to the sender from the connected Gmail account, in the same thread.</p>
+                <h2 className="title">{kase.reject.label}</h2>
+                <p className="cap">Edit the wording if you need to. It is sent to the sender from the connected Gmail account, in the same thread. Only one reply is sent per email.</p>
               </div>
-              <div className="rounded-md bg-surface-inset p-4 text-sm leading-relaxed">
-                <div className="cap mb-2">To {reply?.to} · {reply?.subject}</div>
-                <p className="whitespace-pre-wrap">{reply?.body}</p>
+              <div className="flex flex-col gap-3">
+                <div className="grid gap-1.5 md:grid-cols-[72px_minmax(0,1fr)] md:items-center md:gap-4">
+                  <span className="lbl">To</span>
+                  <span className="wrap-break-word">{reply?.to}</span>
+                </div>
+                <div className="grid gap-1.5 md:grid-cols-[72px_minmax(0,1fr)] md:items-center md:gap-4">
+                  <label className="lbl" htmlFor="reply-subject">Subject</label>
+                  <div className="input">
+                    <input
+                      id="reply-subject"
+                      className="w-full bg-transparent outline-none"
+                      value={reply?.subject ?? ""}
+                      maxLength={300}
+                      onChange={(e) => setDraft({ subject: e.target.value, body: reply?.body ?? "" })}
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-1.5 md:grid-cols-[72px_minmax(0,1fr)] md:gap-4">
+                  <label className="lbl pt-2.5" htmlFor="reply-body">Message</label>
+                  <textarea
+                    id="reply-body"
+                    rows={11}
+                    maxLength={5000}
+                    className="input h-auto w-full resize-y px-3 py-2.5 text-sm leading-relaxed outline-none"
+                    value={reply?.body ?? ""}
+                    onChange={(e) => setDraft({ subject: reply?.subject ?? "", body: e.target.value })}
+                  />
+                </div>
               </div>
-              <button type="button" className="btn accent self-start" disabled={busy} onClick={saveRejected}>
-                <Mail size={16} strokeWidth={1.75} aria-hidden /> {busy ? "Sending…" : "Reject and send reply"}
-              </button>
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  className="btn accent"
+                  disabled={busy || !reply?.subject.trim() || !reply?.body.trim()}
+                  onClick={saveRejected}
+                >
+                  <Mail size={16} strokeWidth={1.75} aria-hidden /> {busy ? "Sending…" : "Send email"}
+                </button>
+                {draft && (
+                  <button type="button" className="btn ghost" disabled={busy} onClick={() => setDraft(null)}>
+                    Reset to the original wording
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
@@ -206,6 +254,15 @@ export function ReviewView({ email, onResolved }: { email: BatchEmail; onResolve
           )}
         </>
       )}
+    </div>
+  );
+}
+
+function SentNotice() {
+  return (
+    <div className="card flex flex-col gap-1 p-4">
+      <span className="font-semibold">Reply already sent</span>
+      <span className="cap">The sender has been emailed. Only one reply is sent per email.</span>
     </div>
   );
 }
