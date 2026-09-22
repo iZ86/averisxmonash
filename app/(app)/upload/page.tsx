@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AlertTriangle } from "lucide-react";
 import { PageHeader } from "@/components/ui";
 import { UploadForm } from "./upload-form";
 
@@ -21,6 +22,13 @@ export default function UploadPage() {
           Provide a single <span className="code">.zip</span> containing <span className="code">inbox/</span> and{" "}
           <span className="code">attachments/</span> folders, or upload the two folders separately.
         </p>
+        <div className="card flex items-start gap-3 border-transparent px-5 py-4" style={{ background: "var(--accent-soft)" }}>
+          <AlertTriangle size={18} strokeWidth={1.75} aria-hidden className="mt-0.5 shrink-0 text-status-review" />
+          <p className="cap">
+            Due to a server deployment limit, a single upload can process at most <b>100 emails</b> at once. Split larger
+            batches into multiple uploads.
+          </p>
+        </div>
         <UploadForm />
       </div>
     </>
