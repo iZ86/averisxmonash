@@ -41,7 +41,7 @@ export async function POST(request: Request) {
 
   const { data: attachments, error: attError } = await supabase
     .from("email_attachments")
-    .select("filename, extracted_text")
+    .select("filename, extracted_text, used_ocr")
     .eq("email_id", emailId);
   if (attError) return NextResponse.json({ success: false, error: attError.message }, { status: 500 });
 
@@ -58,6 +58,9 @@ export async function POST(request: Request) {
         attachment_name: a.filename,
         attachment_content: a.extracted_text,
         ...(a.extracted_text ? {} : { note: "No text was extracted from this file during sync." }),
+        // extracted_text already holds the OCR output, so nothing is re-OCR'd;
+        // the flag just keeps the OCR downgrade consistent with the first run.
+        used_ocr: a.used_ocr ?? false,
       })),
     });
 

@@ -4,7 +4,41 @@ import mammoth from "mammoth";
 import { extractText, getDocumentProxy } from "unpdf";
 import WordExtractor from "word-extractor";
 import type { ClassifierAttachment } from "@/lib/email-classification/schemas";
+import { ocrPdfs } from "./ocr";
 import type { EmailAttachment } from "./types";
+
+const NO_TEXT_LAYER_NOTE = "The PDF has no text layer (it is a scanned image), so no text could be extracted.";
+
+/**
+ * `toClassifierAttachment` for every attachment on one email, plus the OCR
+ * fallback: PDFs that opened but had no text layer are transcribed together in
+ * a single OCR request and marked `used_ocr`. Only the empty-text case is
+ * OCR'd — a PDF that fails to parse at all stays unreadable, and a PDF with a
+ * text layer keeps its exact text. Never throws: if OCR fails, those PDFs keep
+ * their no-text-layer note, exactly as before OCR existed.
+ */
+export async function toClassifierAttachments(attachments: EmailAttachment[]): Promise<ClassifierAttachment[]> {
+  const results = await Promise.all(attachments.map(toClassifierAttachment));
+
+  const scanned = attachments.flatMap((attachment, index) =>
+    results[index].note === NO_TEXT_LAYER_NOTE && attachment.data ? [{ index, filename: attachment.filename, data: attachment.data }] : [],
+  );
+  if (scanned.length === 0) return results;
+
+  let texts: Map<string, string>;
+  try {
+    texts = await ocrPdfs(scanned);
+  } catch (error) {
+    console.error("OCR failed; scanned PDFs stay unreadable", error);
+    return results;
+  }
+
+  for (const { index, filename } of scanned) {
+    const text = texts.get(filename)?.trim();
+    if (text) results[index] = { attachment_name: filename, attachment_content: text, used_ocr: true };
+  }
+  return results;
+}
 
 /**
  * Converts an attachment into what the LLM sees: its text, or `null` plus a
@@ -24,11 +58,7 @@ export async function toClassifierAttachment(attachment: EmailAttachment): Promi
       case ".txt":
         return withText(filename, data.toString("utf8"), "The file is empty.");
       case ".pdf":
-        return withText(
-          filename,
-          await pdfToText(data),
-          "The PDF has no text layer (it is a scanned image), so no text could be extracted.",
-        );
+        return withText(filename, await pdfToText(data), NO_TEXT_LAYER_NOTE);
       case ".docx":
         return withText(filename, (await mammoth.extractRawText({ buffer: data })).value, "The document contains no text.");
       case ".doc":
