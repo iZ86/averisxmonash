@@ -4,7 +4,7 @@ Catch mismatched shipping details before the draft is final. This app watches an
 
 > **Hackathon:** Averis x Monash Hackathon 2026, organized by Averis, Malaysia Digital, Google Developer Group – Monash University Malaysia, and Monash University Malaysia Tech Club.
 > **Team:** Lam Way Hou (lead), Isaac Yeow Ming, Foo Jia Seng, Tan Li Yang, Liew Wei Shen.
-> **Live demo:** _TBD — add deployed URL and/or demo video link here._
+> **Live demo:** [Demo video](https://youtu.be/FO73hUW1DNM) · [averisxmonash.vercel.app](https://averisxmonash.vercel.app/)
 
 ## Table of contents
 
