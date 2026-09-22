@@ -51,6 +51,10 @@ export type ClassifierAttachment = {
   attachment_name: string;
   attachment_content: string | null;
   note?: string;
+  // The text came from OCR rather than a text layer. Sent to the model, which
+  // must not repair misread characters in such a document, and used by
+  // `classifyEmail` to distrust a MISMATCH built on it.
+  used_ocr?: boolean;
 };
 
 export type ClassifierInput = {
