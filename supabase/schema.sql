@@ -49,6 +49,7 @@ CREATE TABLE public.email_attachments (
   size_bytes integer,
   extracted_text text,
   extraction_note text,
+  used_ocr boolean NOT NULL DEFAULT false,
   position integer NOT NULL DEFAULT 0,
   storage_path text,
   CONSTRAINT email_attachments_pkey PRIMARY KEY (id),

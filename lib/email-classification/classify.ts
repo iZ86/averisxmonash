@@ -32,11 +32,12 @@ export class ClassificationError extends Error {
 
 export async function classifyEmail(email: ClassifierInput): Promise<ClassificationResponse> {
   const failures: string[] = [];
+  const usedOcr = email.attachments.some((attachment) => attachment.used_ocr);
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     if (attempt > 1) await sleep(RETRY_DELAY_MS * (attempt - 1));
     const outcome = await requestClassification(email);
-    if (outcome.ok) return toResponse(email.email_id, outcome.classification);
+    if (outcome.ok) return toResponse(email.email_id, outcome.classification, usedOcr);
     failures.push(`attempt ${attempt}: ${outcome.error}`);
   }
 
@@ -64,7 +65,7 @@ async function sendRequest(email: ClassifierInput) {
       temperature: 0,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: JSON.stringify(email, null, 2) },
+        { role: "user", content: JSON.stringify(withOcrFlags(email), null, 2) },
       ],
       tools: [
         {
@@ -153,7 +154,18 @@ function normalizeWeightUnit(value: string | null | undefined): string | null {
   return unit || null;
 }
 
-function toResponse(emailId: string, classification: Classification): ClassificationResponse {
+// Every attachment states whether its text came from OCR, so the prompt's
+// rule for transcribed documents (don't repair misread characters) can apply
+// to those alone and leave text-layer documents untouched. The downgrade in
+// toResponse stays as the backstop.
+function withOcrFlags(email: ClassifierInput): ClassifierInput {
+  return {
+    ...email,
+    attachments: email.attachments.map((attachment) => ({ ...attachment, used_ocr: attachment.used_ocr ?? false })),
+  };
+}
+
+function toResponse(emailId: string, classification: Classification, usedOcr: boolean): ClassificationResponse {
   const categories = classification.categories
     .filter((c) => c.confidence_score > 0)
     .map(({ category, confidence_score }) => ({ category, confidence_score }));
@@ -216,6 +228,17 @@ function toResponse(emailId: string, classification: Classification): Classifica
   } else if (bl?.status === "NEEDS_REVIEW") {
     response.status = "NEEDS_REVIEW";
     response.review_reason = bl.review_reason ?? null;
+  }
+
+  // A misread digit in OCR output looks exactly like a real discrepancy, so a
+  // MISMATCH built on OCR text goes to a person instead. MISMATCH is only ever
+  // set above when BL_COMPARISON is the top category, so this can't touch any
+  // other category's result.
+  if (usedOcr && response.status === "MISMATCH") {
+    response.status = "NEEDS_REVIEW";
+    response.review_reason = "unreadable";
+    response.defect_fields = [];
+    response.has_defect = false;
   }
 
   return response;

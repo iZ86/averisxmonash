@@ -2,7 +2,7 @@ import "server-only";
 import type { gmail_v1 } from "googleapis";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { parseMessage } from "@/lib/google/gmail";
-import { toClassifierAttachment } from "./extract-text";
+import { toClassifierAttachments } from "./extract-text";
 import { attachmentPath, uploadAttachment } from "./attachment-storage";
 import { processEmail } from "./index";
 import {
@@ -39,8 +39,8 @@ export async function processSyncedEmail(
       return { ...ref, data: bytes };
     }),
   );
-  const extracted = await Promise.all(
-    attachmentBuffers.map((attachment) => toClassifierAttachment({ filename: attachment.filename, data: attachment.data })),
+  const extracted = await toClassifierAttachments(
+    attachmentBuffers.map((attachment) => ({ filename: attachment.filename, data: attachment.data })),
   );
 
   const storagePaths = await Promise.all(
@@ -66,6 +66,9 @@ export async function processSyncedEmail(
         size_bytes: attachment.data?.byteLength ?? null,
         extracted_text: extracted[index].attachment_content,
         extraction_note: extracted[index].note ?? null,
+        // Lets a retry, which re-classifies from extracted_text without
+        // re-running OCR, still apply the OCR downgrade.
+        used_ocr: extracted[index].used_ocr ?? false,
         position: index,
         storage_path: storagePaths[index],
       })),

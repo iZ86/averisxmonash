@@ -4,7 +4,7 @@
 
 import "server-only";
 import { classifyEmail } from "@/lib/email-classification/classify";
-import { toClassifierAttachment } from "./extract-text";
+import { toClassifierAttachments } from "./extract-text";
 import type {
   AttachmentFile,
   ClassificationResponse,
@@ -19,7 +19,7 @@ const DEFAULT_CONCURRENCY = 10;
 
 /** Classifies one email. Throws if the LLM call fails after retries. */
 export async function processEmail(email: EmailInput): Promise<ClassificationResponse> {
-  const attachments = await Promise.all(email.attachments.map(toClassifierAttachment));
+  const attachments = await toClassifierAttachments(email.attachments);
   return classifyEmail({ ...email, attachments });
 }
 
